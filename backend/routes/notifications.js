@@ -24,7 +24,13 @@ function toResponse(notification) {
 router.get("/", async (req, res) => {
   try {
     const studentId = req.query.studentId;
-    const query = studentId ? { $or: [{ targetId: "all" }, { targetId: studentId }] } : {};
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const base = { date: { $gte: thirtyDaysAgo } };
+    const query = studentId
+      ? { ...base, $or: [{ targetId: "all" }, { targetId: studentId }] }
+      : base;
+
     const list = await Notification.find(query).sort({ date: -1 });
     res.json(list.map(toResponse));
   } catch (error) {

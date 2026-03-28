@@ -25,4 +25,7 @@ const notificationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Auto-delete documents 30 days after the `date` field
+notificationSchema.index({ date: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
+
 module.exports = mongoose.model("Notification", notificationSchema);
