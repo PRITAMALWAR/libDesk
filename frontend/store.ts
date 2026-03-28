@@ -18,6 +18,7 @@ export interface User {
   feeStatus: FeeStatus;
   feeAmount: number;
   isBlocked: boolean;
+  photoUrl?: string | null;
 }
 
 export interface Attendance {
@@ -78,10 +79,11 @@ interface AppState {
 
   // Admin - Students
   fetchStudents: () => Promise<void>;
-  addStudent: (student: StudentInput) => Promise<{ ok: boolean; message?: string }>;
+  addStudent: (student: StudentInput) => Promise<{ ok: boolean; message?: string; student?: User }>;
   updateStudent: (id: string, data: Partial<User>) => Promise<{ ok: boolean; message?: string }>;
   deleteStudent: (id: string) => Promise<{ ok: boolean; message?: string }>;
   toggleBlockStudent: (id: string) => Promise<{ ok: boolean; message?: string }>;
+  uploadStudentPhoto: (id: string, localUri: string) => Promise<{ ok: boolean; message?: string }>;
 
   // Admin - Attendance
   generateDailyQr: (opts?: { rotate?: boolean }) => Promise<QrTokenInfo | null>;
@@ -214,7 +216,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       const created = (await response.json()) as User;
       set((state) => ({ users: [...state.users.filter((u) => u.role !== 'student' || u.id !== created.id), created] }));
-      return { ok: true };
+      return { ok: true, student: created };
     } catch {
       return { ok: false, message: `Backend unavailable (${API_URL})` };
     }
@@ -253,6 +255,35 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((state) => ({
         users: state.users.filter((u) => u.id !== id),
         currentUser: state.currentUser?.id === id ? null : state.currentUser,
+      }));
+      return { ok: true };
+    } catch {
+      return { ok: false, message: `Backend unavailable (${API_URL})` };
+    }
+  },
+
+  uploadStudentPhoto: async (id, localUri) => {
+    try {
+      const formData = new FormData();
+      const filename = localUri.split('/').pop() ?? 'photo.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      // React Native FormData accepts this object shape for file uploads
+      formData.append('photo', { uri: localUri, name: filename, type } as unknown as Blob);
+
+      const response = await fetch(`${API_URL}/api/students/${id}/photo`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        return { ok: false, message: await parseApiError(response) };
+      }
+
+      const updated = (await response.json()) as User;
+      set((state) => ({
+        users: state.users.map((u) => (u.id === id ? updated : u)),
+        currentUser: state.currentUser?.id === id ? updated : state.currentUser,
       }));
       return { ok: true };
     } catch {

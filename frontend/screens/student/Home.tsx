@@ -1,296 +1,432 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAppStore } from '../../store';
 import { Ionicons } from '@expo/vector-icons';
 import { differenceInDays, format } from 'date-fns';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { theme } from '../../theme';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useScrollBottomForTabBar } from '../../hooks/useScrollBottomForTabBar';
+import LibraryCard from '../../components/LibraryCard';
+import { CATEGORY_META, resolveNotificationCategory } from '../../constants/notificationCategoryUi';
 
 export default function StudentHome() {
-  const navigation = useNavigation();
-  const currentUser = useAppStore((state) => state.currentUser);
-  const attendances = useAppStore((state) => state.attendances);
-  const notifications = useAppStore((state) => state.notifications);
-  const users = useAppStore((state) => state.users);
-  const getStudentNotifications = useAppStore((state) => state.getStudentNotifications);
+  const navigation = useNavigation<any>();
+  const currentUser = useAppStore((s) => s.currentUser);
+  const attendances = useAppStore((s) => s.attendances);
+  const notifications = useAppStore((s) => s.notifications);
+  const users = useAppStore((s) => s.users);
+  const getStudentNotifications = useAppStore((s) => s.getStudentNotifications);
+  const scrollBottom = useScrollBottomForTabBar();
+
+  const studentAttendances = useMemo(
+    () => (currentUser ? attendances.filter((a) => a.studentId === currentUser.id) : []),
+    [attendances, currentUser]
+  );
+
+  const attendancePct = useMemo(() => {
+    const d = new Date().getDate();
+    return Math.min(100, Math.round((studentAttendances.length / Math.max(1, d)) * 100));
+  }, [studentAttendances]);
+
+  const recentActivity = useMemo(() => {
+    if (!currentUser) return [];
+    return [...getStudentNotifications(currentUser.id)]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 4);
+  }, [currentUser, getStudentNotifications, notifications, users]);
 
   if (!currentUser) return null;
 
-  const daysRemaining = differenceInDays(new Date(currentUser.expiryDate), new Date());
-  const isExpired = daysRemaining < 0;
-  const isExpiringSoon = !isExpired && daysRemaining <= 7;
-
-  const studentAttendances = useMemo(
-    () => attendances.filter((a) => a.studentId === currentUser.id),
-    [attendances, currentUser.id]
-  );
-  const attendancePct = Math.min(
-    100,
-    Math.round((studentAttendances.length / Math.max(1, new Date().getDate())) * 100)
-  );
-
-  const recentActivity = useMemo(() => {
-    const list = getStudentNotifications(currentUser.id);
-    return [...list].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
-  }, [currentUser.id, getStudentNotifications, notifications, users]);
-
-  const scrollBottom = useScrollBottomForTabBar();
+  const daysLeft = differenceInDays(new Date(currentUser.expiryDate), new Date());
+  const isExpired = daysLeft < 0;
+  const isExpiringSoon = !isExpired && daysLeft <= 7;
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: scrollBottom }]}>
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Library Student Card</Text>
-          <Text style={styles.cardName}>{currentUser.name}</Text>
-          <Text style={styles.cardUser}>@{currentUser.username}</Text>
-
-          <View style={styles.cardRow}>
-            <View style={styles.metaPill}>
-              <Text style={styles.metaKey}>Active From</Text>
-              <Text style={styles.metaVal}>{format(new Date(currentUser.joinDate), 'dd MMM yyyy')}</Text>
-            </View>
-            <View style={styles.metaPill}>
-              <Text style={styles.metaKey}>Active To</Text>
-              <Text style={styles.metaVal}>{format(new Date(currentUser.expiryDate), 'dd MMM yyyy')}</Text>
-            </View>
-          </View>
-
-          <View style={styles.cardRow}>
-            <View style={[styles.statusBadge, isExpired ? styles.badStatus : styles.goodStatus]}>
-              <Text style={[styles.statusText, isExpired ? styles.badText : styles.goodText]}>
-                {isExpired ? 'Expired' : 'Active Member'}
-              </Text>
-            </View>
-            <Text style={styles.mobile}>Mobile: {currentUser.mobile}</Text>
-          </View>
+    <SafeAreaView style={styles.safe} edges={['left', 'right']}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: scrollBottom + 24 }}
+      >
+        {/* ─────────────────────────────────────────
+            SECTION 1 · Library Card (HERO, at top)
+        ───────────────────────────────────────── */}
+        <View style={styles.cardSection}>
+          <LibraryCard user={currentUser} />
         </View>
 
-        <TouchableOpacity
-          style={styles.scanButton}
-          activeOpacity={0.9}
-          accessibilityRole="button"
-          accessibilityLabel="Open scan attendance"
-          onPress={() => (navigation as any).navigate('Scan Attendance')}
-        >
-          <Ionicons name="qr-code-outline" size={16} color="#fff" />
-          <Text style={styles.scanText}>Quick Scan Entrance</Text>
-        </TouchableOpacity>
-
+        {/* ─────────────────────────────────────────
+            SECTION 3 · Stat pills
+        ───────────────────────────────────────── */}
         <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statTitle}>Fee Status</Text>
-            <Text style={styles.statValue}>{currentUser.feeStatus}</Text>
-            <Text style={styles.statMeta}>Amount: Rs {currentUser.feeAmount}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statTitle}>Attendance</Text>
-            <Text style={styles.statValue}>{attendancePct}%</Text>
-            <View style={styles.progressBg}>
-              <View style={[styles.progressFill, { width: `${attendancePct}%` }]} />
-            </View>
-          </View>
+          <StatPill
+            icon="time-outline"
+            label="Days Left"
+            value={isExpired ? 'Expired' : `${daysLeft}`}
+            valueColor={isExpired ? '#EF4444' : isExpiringSoon ? '#F59E0B' : '#10B981'}
+            bg={isExpired ? '#FEF2F2' : isExpiringSoon ? '#FFFBEB' : '#ECFDF5'}
+            border={isExpired ? '#FECACA' : isExpiringSoon ? '#FDE68A' : '#A7F3D0'}
+          />
+          <StatPill
+            icon="checkmark-circle-outline"
+            label="Attendance"
+            value={`${attendancePct}%`}
+            valueColor="#2563EB"
+            bg="#EFF6FF"
+            border="#BFDBFE"
+          />
+          <StatPill
+            icon="cash-outline"
+            label="Fee"
+            value={currentUser.feeStatus === 'Half Paid' ? 'Half' : currentUser.feeStatus}
+            valueColor={
+              currentUser.feeStatus === 'Paid'
+                ? '#059669'
+                : currentUser.feeStatus === 'Half Paid'
+                ? '#D97706'
+                : '#DC2626'
+            }
+            bg={
+              currentUser.feeStatus === 'Paid'
+                ? '#ECFDF5'
+                : currentUser.feeStatus === 'Half Paid'
+                ? '#FFFBEB'
+                : '#FEF2F2'
+            }
+            border={
+              currentUser.feeStatus === 'Paid'
+                ? '#A7F3D0'
+                : currentUser.feeStatus === 'Half Paid'
+                ? '#FDE68A'
+                : '#FECACA'
+            }
+          />
         </View>
 
-        {/* Membership Status — clear copy for active / expired / expiring soon */}
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Membership Status</Text>
-        </View>
-        <View
-          style={[
-            styles.membershipCard,
-            isExpired && styles.membershipCardExpired,
-            isExpiringSoon && !isExpired && styles.membershipCardWarn,
-          ]}
-        >
-          <View style={styles.membershipHeader}>
-            <View
-              style={[
-                styles.membershipIconWrap,
-                isExpired && styles.membershipIconExpired,
-                isExpiringSoon && !isExpired && styles.membershipIconWarn,
-              ]}
+        {/* ─────────────────────────────────────────
+            SECTION 4 · Big scan CTA
+        ───────────────────────────────────────── */}
+        <View style={styles.px}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Scan Attendance')}
+            activeOpacity={0.88}
+            style={styles.scanBtn}
+          >
+            <LinearGradient
+              colors={['#4F46E5', '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.scanGrad}
             >
-              <Ionicons
-                name={isExpired ? 'alert-circle' : isExpiringSoon ? 'hourglass-outline' : 'shield-checkmark'}
-                size={22}
-                color={isExpired ? '#B91C1C' : isExpiringSoon ? '#B45309' : '#059669'}
-              />
-            </View>
-            <View style={styles.membershipHeadText}>
-              <Text style={styles.membershipHeadline}>
-                {isExpired
-                  ? 'Membership expired'
-                  : isExpiringSoon
-                    ? 'Renew soon'
-                    : 'Membership active'}
-              </Text>
-              <Text style={styles.membershipSub}>
-                Valid until {format(new Date(currentUser.expiryDate), 'EEEE, d MMM yyyy')}
-              </Text>
-            </View>
-          </View>
-          {!isExpired ? (
-            <View style={styles.membershipDaysRow}>
-              <Text style={[styles.membershipBig, isExpiringSoon && styles.membershipBigWarn]}>
-                {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} left
-              </Text>
-              <Text style={styles.membershipHint}>Contact the library to renew before expiry.</Text>
-            </View>
-          ) : (
-            <Text style={styles.membershipExpiredMsg}>
-              Your access may be limited. Please visit the library to renew your membership.
-            </Text>
-          )}
+              <View style={styles.scanIconWrap}>
+                <Ionicons name="qr-code-outline" size={28} color="#fff" />
+              </View>
+              <View style={styles.scanText}>
+                <Text style={styles.scanTitle}>Scan Attendance</Text>
+                <Text style={styles.scanSub}>Tap to mark today's visit</Text>
+              </View>
+              <View style={styles.scanArrow}>
+                <Ionicons name="arrow-forward" size={20} color="rgba(255,255,255,0.8)" />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
 
-        {/* Recent Activity — only this student’s announcements + system reminders */}
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <Text style={styles.sectionCaption}>Updates for you</Text>
-        </View>
-        <View style={styles.listCard}>
-          {recentActivity.length === 0 ? (
-            <View style={styles.emptyBlock}>
-              <Ionicons name="newspaper-outline" size={36} color="#CBD5E1" />
-              <Text style={styles.emptyTitle}>No updates yet</Text>
-              <Text style={styles.emptyText}>Library announcements will appear here.</Text>
-            </View>
-          ) : (
-            recentActivity.map((n, index) => (
-              <View
-                key={n.id}
-                style={[styles.itemRow, index < recentActivity.length - 1 && styles.itemRowBorder]}
-              >
-                <View style={styles.itemIconCircle}>
-                  <Ionicons
-                    name={n.id.startsWith('sys-') ? 'information-circle' : 'notifications-outline'}
-                    size={18}
-                    color={n.id.startsWith('sys-') ? '#D97706' : '#4F46E5'}
-                  />
-                </View>
-                <View style={styles.itemTextWrap}>
-                  <Text style={styles.itemTitle} numberOfLines={2}>
-                    {n.title}
-                  </Text>
-                  {!!n.message && (
-                    <Text style={styles.itemBody} numberOfLines={2}>
-                      {n.message}
-                    </Text>
-                  )}
-                  <Text style={styles.itemMeta}>{format(new Date(n.date), 'dd MMM yyyy, hh:mm a')}</Text>
-                </View>
+        {/* ─────────────────────────────────────────
+            SECTION 5 · Membership alert (conditional)
+        ───────────────────────────────────────── */}
+        {(isExpired || isExpiringSoon) && (
+          <View style={styles.px}>
+            <LinearGradient
+              colors={isExpired ? ['#991B1B', '#B91C1C'] : ['#92400E', '#B45309']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.alert}
+            >
+              <View style={styles.alertIcon}>
+                <Ionicons
+                  name={isExpired ? 'alert-circle' : 'hourglass-outline'}
+                  size={22}
+                  color="#fff"
+                />
               </View>
-            ))
-          )}
+              <View style={styles.alertBody}>
+                <Text style={styles.alertTitle}>
+                  {isExpired ? 'Membership Expired' : `Expiring in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`}
+                </Text>
+                <Text style={styles.alertSub}>
+                  {isExpired
+                    ? 'Please visit the library to renew.'
+                    : 'Contact library to renew before expiry.'}
+                </Text>
+              </View>
+            </LinearGradient>
+          </View>
+        )}
+
+        {/* ─────────────────────────────────────────
+            SECTION 7 · Recent Activity
+        ───────────────────────────────────────── */}
+        <View style={styles.px}>
+          <SectionHeader title="Recent Activity" />
+          <View style={styles.actCard}>
+            {recentActivity.length === 0 ? (
+              <View style={styles.empty}>
+                <View style={styles.emptyIconWrap}>
+                  <Ionicons name="newspaper-outline" size={32} color="#CBD5E1" />
+                </View>
+                <Text style={styles.emptyTitle}>No updates yet</Text>
+                <Text style={styles.emptySub}>Library announcements will appear here.</Text>
+              </View>
+            ) : (
+              recentActivity.map((n, i) => {
+                const isSystem = n.id.startsWith('sys-');
+                const cat = resolveNotificationCategory(n.category, isSystem);
+                const meta = CATEGORY_META[cat];
+                return (
+                  <View
+                    key={n.id}
+                    style={[styles.actRow, i < recentActivity.length - 1 && styles.actRowBorder]}
+                  >
+                    <View style={[styles.actIconBox, { backgroundColor: meta.bg, borderColor: meta.border }]}>
+                      <Ionicons name={meta.icon} size={17} color={meta.color} />
+                    </View>
+                    <View style={styles.actContent}>
+                      <View style={styles.actHead}>
+                        <Text style={styles.actTitle} numberOfLines={1}>{n.title}</Text>
+                        <View style={[styles.catChip, { backgroundColor: meta.bg }]}>
+                          <Text style={[styles.catChipText, { color: meta.color }]}>{meta.short}</Text>
+                        </View>
+                      </View>
+                      {!!n.message && (
+                        <Text style={styles.actMsg} numberOfLines={2}>{n.message}</Text>
+                      )}
+                      <Text style={styles.actTime}>{format(new Date(n.date), 'dd MMM · hh:mm a')}</Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </View>
         </View>
+
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// ── Sub-components ────────────────────────────────────────────────────────
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <View style={styles.secHeader}>
+      <View style={styles.secDot} />
+      <Text style={styles.secTitle}>{title}</Text>
+    </View>
+  );
+}
+
+function StatPill({
+  icon, label, value, valueColor, bg, border,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  valueColor: string;
+  bg: string;
+  border: string;
+}) {
+  return (
+    <View style={[styles.pill, { backgroundColor: bg, borderColor: border }]}>
+      <Ionicons name={icon} size={16} color={valueColor} />
+      <Text style={[styles.pillValue, { color: valueColor }]}>{value}</Text>
+      <Text style={styles.pillLabel}>{label}</Text>
+    </View>
+  );
+}
+
+
+// ── Styles ────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#EFF1F7' },
-  content: { padding: 14, paddingBottom: 0 },
-  card: {
-    backgroundColor: '#3F51B5',
-    borderRadius: 14,
-    padding: 14,
+  safe: { flex: 1, backgroundColor: '#F1F5FF' },
+  px: { paddingHorizontal: 16, marginBottom: 16 },
+
+  // ── Card section ──
+  cardSection: {
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 16,
+    backgroundColor: '#fff',
+    shadowColor: '#4338CA',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
   },
-  cardLabel: { color: '#C7D2FE', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  cardName: { marginTop: 6, color: '#fff', fontSize: 24, fontWeight: '800' },
-  cardUser: { marginTop: 2, color: '#E0E7FF', fontSize: 13, fontWeight: '600' },
-  cardRow: { marginTop: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  metaPill: { flex: 1, backgroundColor: '#1E2D8F', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 6 },
-  metaKey: { color: '#A5B4FC', fontSize: 9, fontWeight: '700' },
-  metaVal: { color: '#E0E7FF', fontSize: 12, fontWeight: '700', marginTop: 2 },
-  statusBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  goodStatus: { backgroundColor: '#DCFCE7' },
-  badStatus: { backgroundColor: '#FEE2E2' },
-  statusText: { fontSize: 10, fontWeight: '700' },
-  goodText: { color: '#166534' },
-  badText: { color: '#B91C1C' },
-  mobile: { color: '#E0E7FF', fontSize: 11, fontWeight: '700' },
-  scanButton: {
-    marginTop: 10,
-    backgroundColor: '#4F46E5',
-    borderRadius: 10,
-    height: 46,
+
+  // ── Stats row ──
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 16,
+    marginTop: 2,
+    marginBottom: 16,
+  },
+  pill: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 4,
+  },
+  pillValue: { fontSize: 16, fontWeight: '800', letterSpacing: -0.3 },
+  pillLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.2 },
+
+  // ── Scan CTA ──
+  scanBtn: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
+    marginBottom: 16,
+  },
+  scanGrad: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    gap: 14,
   },
-  scanText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  statsRow: { flexDirection: 'row', marginTop: 12, gap: 10 },
-  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 10, padding: 10, ...theme.shadow.card },
-  statTitle: { fontSize: 10, color: '#94A3B8', fontWeight: '700' },
-  statValue: { marginTop: 4, fontSize: 20, color: '#1E1B4B', fontWeight: '800' },
-  statMeta: { marginTop: 2, fontSize: 11, color: '#94A3B8' },
-  progressBg: { marginTop: 8, height: 4, borderRadius: 999, backgroundColor: '#E5E7EB' },
-  progressFill: { height: 4, borderRadius: 999, backgroundColor: '#3F51B5' },
-  sectionRow: { marginTop: 18, marginBottom: 6 },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
-  sectionCaption: { marginTop: 4, fontSize: 12, fontWeight: '600', color: '#64748B' },
-  membershipCard: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...theme.shadow.card,
-  },
-  membershipCardWarn: {
-    borderColor: '#FDE68A',
-    backgroundColor: '#FFFBEB',
-  },
-  membershipCardExpired: {
-    borderColor: '#FECACA',
-    backgroundColor: '#FEF2F2',
-  },
-  membershipHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  membershipIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#ECFDF5',
+  scanIconWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  membershipIconWarn: { backgroundColor: '#FEF3C7' },
-  membershipIconExpired: { backgroundColor: '#FEE2E2' },
-  membershipHeadText: { flex: 1, minWidth: 0 },
-  membershipHeadline: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
-  membershipSub: { marginTop: 4, fontSize: 12, fontWeight: '600', color: '#64748B', lineHeight: 17 },
-  membershipDaysRow: { marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E2E8F0' },
-  membershipBig: { fontSize: 28, fontWeight: '800', color: '#059669', letterSpacing: -0.5 },
-  membershipBigWarn: { color: '#B45309' },
-  membershipHint: { marginTop: 6, fontSize: 12, fontWeight: '600', color: '#64748B', lineHeight: 18 },
-  membershipExpiredMsg: {
-    marginTop: 12,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#991B1B',
-    lineHeight: 20,
-  },
-  listCard: { backgroundColor: '#fff', borderRadius: 14, padding: 4, ...theme.shadow.card, borderWidth: 1, borderColor: '#F1F5F9' },
-  itemRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 12, paddingHorizontal: 10 },
-  itemRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F1F5F9' },
-  itemIconCircle: {
+  scanText: { flex: 1 },
+  scanTitle: { fontSize: 17, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
+  scanSub: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.7)', marginTop: 3 },
+  scanArrow: {
     width: 36,
     height: 36,
-    borderRadius: 10,
-    backgroundColor: '#EEF2FF',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
   },
-  itemTextWrap: { flex: 1, minWidth: 0 },
-  itemTitle: { fontSize: 14, color: '#0F172A', fontWeight: '700', lineHeight: 19 },
-  itemBody: { marginTop: 4, fontSize: 12, color: '#64748B', fontWeight: '500', lineHeight: 17 },
-  itemMeta: { marginTop: 6, fontSize: 11, color: '#94A3B8', fontWeight: '600' },
-  emptyBlock: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 16 },
-  emptyTitle: { marginTop: 10, fontSize: 15, fontWeight: '800', color: '#475569' },
-  emptyText: { marginTop: 6, fontSize: 13, color: '#94A3B8', textAlign: 'center', lineHeight: 19 },
+
+  // ── Section header ──
+  secHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  secDot: {
+    width: 4,
+    height: 18,
+    borderRadius: 2,
+    backgroundColor: '#4F46E5',
+  },
+  secTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+
+  // ── Alert ──
+  alert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  alertIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alertBody: { flex: 1 },
+  alertTitle: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  alertSub: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.75)', marginTop: 4, lineHeight: 17 },
+
+  // ── Activity card ──
+  actCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EEF2FF',
+    overflow: 'hidden',
+    shadowColor: '#4338CA',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  actRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  actRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#F1F5F9',
+  },
+  actIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    marginTop: 1,
+  },
+  actContent: { flex: 1, minWidth: 0 },
+  actHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  actTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: '#0F172A', lineHeight: 19 },
+  catChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 },
+  catChipText: { fontSize: 9, fontWeight: '800' },
+  actMsg: { marginTop: 4, fontSize: 12, color: '#64748B', fontWeight: '500', lineHeight: 17 },
+  actTime: { marginTop: 5, fontSize: 11, color: '#94A3B8', fontWeight: '600' },
+
+  // ── Empty state ──
+  empty: { alignItems: 'center', paddingVertical: 36, paddingHorizontal: 20 },
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  emptyTitle: { marginTop: 14, fontSize: 16, fontWeight: '800', color: '#334155' },
+  emptySub: { marginTop: 6, fontSize: 13, color: '#94A3B8', textAlign: 'center', lineHeight: 19 },
 });

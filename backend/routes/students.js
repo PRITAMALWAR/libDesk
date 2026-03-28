@@ -1,5 +1,7 @@
 const express = require("express");
 const Student = require("../models/Student");
+const upload = require("../src/middleware/upload.middleware");
+const { uploadBuffer, isCloudinaryConfigured } = require("../src/utils/cloudinary");
 
 const router = express.Router();
 
@@ -16,6 +18,7 @@ function toStudentResponse(student) {
     feeAmount: student.feeAmount,
     feeStatus: student.feeStatus,
     isBlocked: student.isBlocked,
+    photoUrl: student.photoUrl || null,
   };
 }
 
@@ -127,6 +130,31 @@ router.delete("/:id", async (req, res) => {
     return res.status(204).send();
   } catch (error) {
     return res.status(500).json({ message: "Failed to delete student", error: error.message });
+  }
+});
+
+router.post("/:id/photo", upload.single("photo"), async (req, res) => {
+  try {
+    const student = await Student.findById(req.params.id);
+    if (!student) return res.status(404).json({ message: "Student not found" });
+
+    if (!req.file) return res.status(400).json({ message: "No image file provided" });
+
+    if (!isCloudinaryConfigured()) {
+      return res.status(503).json({ message: "Cloudinary is not configured on the server" });
+    }
+
+    const { url } = await uploadBuffer(req.file.buffer, {
+      public_id: `student_${student._id}`,
+      overwrite: true,
+    });
+
+    student.photoUrl = url;
+    await student.save();
+
+    return res.json(toStudentResponse(student));
+  } catch (error) {
+    return res.status(500).json({ message: "Photo upload failed", error: error.message });
   }
 });
 

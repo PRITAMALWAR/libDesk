@@ -10,14 +10,15 @@ import {
   RefreshControl,
   Platform,
 } from 'react-native';
-import { useAppStore, FeeStatus } from '../../store';
+import { useAppStore } from '../../store';
 import { Ionicons } from '@expo/vector-icons';
-import { differenceInDays, format } from 'date-fns';
+import { differenceInDays } from 'date-fns';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../theme';
 import { useScrollBottomForTabBar } from '../../hooks/useScrollBottomForTabBar';
 import { FLOATING_TAB_BAR_TOP_BUFFER } from '../../constants/tabBar';
+import StudentCard from '../../components/StudentCard';
 
 export default function AdminStudents() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -109,75 +110,14 @@ export default function AdminStudents() {
     );
   };
 
-  const renderStudent = ({ item }: { item: (typeof students)[0] }) => {
-    const daysLeft = differenceInDays(new Date(item.expiryDate), new Date());
-    const expired = daysLeft < 0;
-
-    return (
-      <View style={styles.card}>
-        <TouchableOpacity style={styles.cardMain} onPress={() => goForm(item.id)} activeOpacity={0.75}>
-          <View style={[styles.avatar, item.isBlocked && styles.avatarBlocked]}>
-            <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-          </View>
-          <View style={styles.cardBody}>
-            <View style={styles.cardTopRow}>
-              <Text style={styles.studentName} numberOfLines={1}>
-                {item.name}
-              </Text>
-              <FeePill status={item.feeStatus} />
-            </View>
-            <Text style={styles.studentUser} numberOfLines={1}>
-              @{item.username} · {item.mobile}
-            </Text>
-            <View style={styles.metaRow}>
-              <View style={[styles.statusDot, expired ? styles.dotBad : styles.dotOk]} />
-              <Text style={styles.metaText}>
-                {expired ? 'Expired' : `${Math.max(0, daysLeft)} days left`}
-              </Text>
-              <Text style={styles.metaSep}>·</Text>
-              <Text style={styles.metaText}>₹{item.feeAmount}</Text>
-              {item.isBlocked && (
-                <>
-                  <Text style={styles.metaSep}>·</Text>
-                  <Text style={styles.metaBlocked}>Blocked</Text>
-                </>
-              )}
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
-        </TouchableOpacity>
-
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionChip} onPress={() => goForm(item.id)} activeOpacity={0.85}>
-            <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
-            <Text style={styles.actionChipText}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionChip, styles.actionChipMuted]}
-            onPress={() => handleBlock(item.id, item.name, item.isBlocked)}
-            activeOpacity={0.85}
-          >
-            <Ionicons
-              name={item.isBlocked ? 'lock-open-outline' : 'lock-closed-outline'}
-              size={18}
-              color={item.isBlocked ? '#059669' : '#DC2626'}
-            />
-            <Text style={[styles.actionChipText, { color: item.isBlocked ? '#059669' : '#DC2626' }]}>
-              {item.isBlocked ? 'Unblock' : 'Block'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionChip, styles.actionChipDanger]}
-            onPress={() => handleDelete(item.id, item.name)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="trash-outline" size={18} color="#DC2626" />
-            <Text style={[styles.actionChipText, { color: '#DC2626' }]}>Delete</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
+  const renderStudent = ({ item }: { item: (typeof students)[0] }) => (
+    <StudentCard
+      student={item}
+      onEdit={() => goForm(item.id)}
+      onBlock={() => handleBlock(item.id, item.name, item.isBlocked)}
+      onDelete={() => handleDelete(item.id, item.name)}
+    />
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['left', 'right']}>
@@ -258,16 +198,6 @@ export default function AdminStudents() {
   );
 }
 
-function FeePill({ status }: { status: FeeStatus }) {
-  const paid = status === 'Paid';
-  const half = status === 'Half Paid';
-  return (
-    <View style={[styles.feePill, paid ? styles.fpPaid : half ? styles.fpHalf : styles.fpPending]}>
-      <Text style={[styles.feePillText, paid ? styles.fptPaid : half ? styles.fptHalf : styles.fptPending]}>{status}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F1F5F9' },
   flex: { flex: 1 },
@@ -312,77 +242,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingBottom: 0,
   },
-  card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.lg,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    overflow: 'hidden',
-    ...theme.shadow.card,
-  },
-  cardMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    gap: 12,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#EEF2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarBlocked: { backgroundColor: '#FEE2E2' },
-  avatarText: { fontSize: 18, fontWeight: '800', color: '#4338CA' },
-  cardBody: { flex: 1, minWidth: 0 },
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  studentName: { flex: 1, fontSize: 16, fontWeight: '800', color: theme.colors.text, letterSpacing: -0.2 },
-  studentUser: { marginTop: 4, fontSize: 13, color: theme.colors.mutedText, fontWeight: '600' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' },
-  statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
-  dotOk: { backgroundColor: '#10B981' },
-  dotBad: { backgroundColor: '#EF4444' },
-  metaText: { fontSize: 12, fontWeight: '700', color: '#64748B' },
-  metaSep: { marginHorizontal: 6, color: '#CBD5E1', fontWeight: '700' },
-  metaBlocked: { fontSize: 12, fontWeight: '800', color: '#DC2626' },
-  feePill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, maxWidth: 110 },
-  feePillText: { fontSize: 10, fontWeight: '800' },
-  fpPaid: { backgroundColor: '#DCFCE7' },
-  fptPaid: { color: '#166534' },
-  fpHalf: { backgroundColor: '#FEF3C7' },
-  fptHalf: { color: '#92400E' },
-  fpPending: { backgroundColor: '#FEE2E2' },
-  fptPending: { color: '#991B1B' },
-  actions: {
-    flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.border,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    gap: 8,
-    backgroundColor: '#F8FAFC',
-  },
-  actionChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#EEF2FF',
-  },
-  actionChipMuted: { backgroundColor: '#F1F5F9' },
-  actionChipDanger: { backgroundColor: '#FEF2F2' },
-  actionChipText: { fontSize: 12, fontWeight: '800', color: theme.colors.primary },
   fab: {
     position: 'absolute',
     right: 20,

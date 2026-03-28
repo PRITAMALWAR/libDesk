@@ -1,16 +1,20 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { differenceInDays, format } from 'date-fns';
+import * as ImagePicker from 'expo-image-picker';
 import { theme } from '../../theme';
 import { useAppStore } from '../../store';
+import LibraryCard from '../../components/LibraryCard';
 
 export default function StudentProfile() {
   const currentUser = useAppStore((state) => state.currentUser);
   const attendances = useAppStore((state) => state.attendances);
   const fetchTodayAttendance = useAppStore((state) => state.fetchTodayAttendance);
+  const uploadStudentPhoto = useAppStore((state) => state.uploadStudentPhoto);
   const logout = useAppStore((state) => state.logout);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -35,6 +39,31 @@ export default function StudentProfile() {
 
   if (!currentUser) return null;
 
+  const handlePickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow access to your photo library to set a profile photo.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+
+    if (result.canceled || !result.assets[0]?.uri) return;
+
+    setUploadingPhoto(true);
+    const upload = await uploadStudentPhoto(currentUser.id, result.assets[0].uri);
+    setUploadingPhoto(false);
+
+    if (!upload.ok) {
+      Alert.alert('Upload failed', upload.message || 'Could not upload photo. Please try again.');
+    }
+  };
+
   const onLogout = () => {
     Alert.alert('Logout', 'Do you want to logout now?', [
       { text: 'Cancel', style: 'cancel' },
@@ -45,18 +74,7 @@ export default function StudentProfile() {
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{currentUser.name?.slice(0, 1).toUpperCase() || 'S'}</Text>
-          </View>
-          <Text style={styles.name}>{currentUser.name}</Text>
-          <Text style={styles.username}>@{currentUser.username}</Text>
-          <View style={[styles.memberBadge, stats.isExpired ? styles.badgeDanger : styles.badgeGood]}>
-            <Text style={[styles.memberBadgeText, stats.isExpired ? styles.badgeDangerText : styles.badgeGoodText]}>
-              {stats.isExpired ? 'Membership Expired' : 'Active Member'}
-            </Text>
-          </View>
-        </View>
+        <LibraryCard user={currentUser} onPhotoPress={handlePickPhoto} uploadingPhoto={uploadingPhoto} />
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Personal details</Text>
@@ -124,29 +142,6 @@ function Row({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   content: { padding: 14, paddingBottom: 110, gap: 10 },
-  hero: {
-    backgroundColor: '#312E81',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { color: '#fff', fontSize: 24, fontWeight: '800' },
-  name: { marginTop: 8, color: '#fff', fontSize: 20, fontWeight: '800' },
-  username: { marginTop: 2, color: '#C7D2FE', fontSize: 13, fontWeight: '600' },
-  memberBadge: { marginTop: 10, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  badgeGood: { backgroundColor: '#DCFCE7' },
-  badgeDanger: { backgroundColor: '#FEE2E2' },
-  memberBadgeText: { fontWeight: '700', fontSize: 11 },
-  badgeGoodText: { color: '#166534' },
-  badgeDangerText: { color: '#B91C1C' },
   card: {
     backgroundColor: '#fff',
     borderRadius: 14,

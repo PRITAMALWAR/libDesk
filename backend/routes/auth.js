@@ -38,6 +38,7 @@ function studentResponse(student) {
     feeAmount: student.feeAmount,
     feeStatus: student.feeStatus,
     isBlocked: student.isBlocked,
+    photoUrl: student.photoUrl || null,
   };
 }
 

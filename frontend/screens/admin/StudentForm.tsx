@@ -9,6 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   TextInput,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useAppStore, FeeStatus } from '../../store';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -16,6 +18,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { differenceInDays, format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import { theme } from '../../theme';
 
 export default function AdminStudentForm() {
@@ -27,6 +30,7 @@ export default function AdminStudentForm() {
   const fetchStudents = useAppStore((state) => state.fetchStudents);
   const addStudent = useAppStore((state) => state.addStudent);
   const updateStudent = useAppStore((state) => state.updateStudent);
+  const uploadStudentPhoto = useAppStore((state) => state.uploadStudentPhoto);
 
   const isEditing = !!studentId;
   const existingStudent = isEditing ? users.find((u) => u.id === studentId) : null;
@@ -42,6 +46,8 @@ export default function AdminStudentForm() {
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showPin, setShowPin] = useState(false);
+  const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     if (existingStudent) {
@@ -113,7 +119,38 @@ export default function AdminStudentForm() {
     }
 
     await fetchStudents();
+
+    // Upload photo if one was selected
+    if (pendingPhotoUri) {
+      const savedId = isEditing ? studentId : (result as { ok: boolean; student?: { id: string } }).student?.id;
+      if (savedId) {
+        setUploadingPhoto(true);
+        const photoResult = await uploadStudentPhoto(savedId, pendingPhotoUri);
+        setUploadingPhoto(false);
+        if (!photoResult.ok) {
+          Alert.alert('Photo upload failed', photoResult.message || 'Could not upload photo. You can try again by editing the student.');
+        }
+      }
+    }
+
     navigation.goBack();
+  };
+
+  const pickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow access to your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]?.uri) {
+      setPendingPhotoUri(result.assets[0].uri);
+    }
   };
 
   const feeOptions: FeeStatus[] = ['Paid', 'Half Paid', 'Pending'];
@@ -133,9 +170,25 @@ export default function AdminStudentForm() {
           {/* Top summary */}
           {isEditing && existingStudent ? (
             <View style={styles.hero}>
-              <View style={styles.heroAvatar}>
-                <Text style={styles.heroAvatarText}>{existingStudent.name.charAt(0).toUpperCase()}</Text>
-              </View>
+              <TouchableOpacity onPress={pickPhoto} activeOpacity={0.8} style={styles.heroAvatarWrap}>
+                {pendingPhotoUri || existingStudent.photoUrl ? (
+                  <Image
+                    source={{ uri: pendingPhotoUri ?? existingStudent.photoUrl ?? undefined }}
+                    style={styles.heroAvatarImg}
+                  />
+                ) : (
+                  <View style={styles.heroAvatar}>
+                    <Text style={styles.heroAvatarText}>{existingStudent.name.charAt(0).toUpperCase()}</Text>
+                  </View>
+                )}
+                <View style={styles.heroAvatarEdit}>
+                  {uploadingPhoto ? (
+                    <ActivityIndicator size={12} color="#fff" />
+                  ) : (
+                    <Ionicons name="camera" size={12} color="#fff" />
+                  )}
+                </View>
+              </TouchableOpacity>
               <View style={styles.heroText}>
                 <Text style={styles.heroName} numberOfLines={1}>
                   {existingStudent.name}
@@ -350,6 +403,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
     ...theme.shadow.card,
   },
+  heroAvatarWrap: { position: 'relative' },
+  heroAvatarImg: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
   heroAvatar: {
     width: 56,
     height: 56,
@@ -359,6 +419,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
+  },
+  heroAvatarEdit: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#1E293B',
   },
   heroAvatarText: { fontSize: 22, fontWeight: '800', color: '#fff' },
   heroText: { flex: 1, minWidth: 0 },

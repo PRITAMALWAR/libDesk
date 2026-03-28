@@ -13,6 +13,7 @@ const studentSchema = new mongoose.Schema(
     feeAmount: { type: Number, required: true, min: 0 },
     feeStatus: { type: String, enum: allowedFeeStatus, required: true },
     isBlocked: { type: Boolean, default: false },
+    photoUrl: { type: String, default: null },
   },
   { timestamps: true }
 );
