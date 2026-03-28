@@ -54,6 +54,20 @@ function AdminTabs() {
 }
 
 function StudentTabs() {
+  const currentUser      = useAppStore((s) => s.currentUser);
+  const notifications    = useAppStore((s) => s.notifications);
+  const lastNotifSeenAt  = useAppStore((s) => s.lastNotifSeenAt);
+
+  const unread = (() => {
+    if (!currentUser) return 0;
+    const cutoff = lastNotifSeenAt ? new Date(lastNotifSeenAt).getTime() : 0;
+    return notifications.filter(
+      (n) =>
+        (n.targetId === 'all' || n.targetId === currentUser.id) &&
+        new Date(n.date).getTime() > cutoff
+    ).length;
+  })();
+
   return (
     <Tab.Navigator
       tabBar={(props) => <FloatingTabBar {...props} />}
@@ -93,7 +107,11 @@ function StudentTabs() {
       />
       <Tab.Screen name="Scan Attendance" component={StudentScanQR} options={{ tabBarLabel: 'Scan', title: 'Scan Attendance' }} />
       <Tab.Screen name="Calendar" component={StudentCalendarScreen} options={{ tabBarLabel: 'Calendar', title: 'Attendance History' }} />
-      <Tab.Screen name="Notifications" component={StudentNotifications} options={{ tabBarLabel: 'Notifications', title: 'Notifications' }} />
+      <Tab.Screen
+        name="Notifications"
+        component={StudentNotifications}
+        options={{ tabBarLabel: 'Notifications', title: 'Notifications', tabBarBadge: unread > 0 ? unread : undefined }}
+      />
     </Tab.Navigator>
   );
 }

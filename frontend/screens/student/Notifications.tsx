@@ -40,6 +40,7 @@ export default function StudentNotifications() {
   const users              = useAppStore((s) => s.users);
   const fetchNotifications = useAppStore((s) => s.fetchNotifications);
   const getStudentNotifs   = useAppStore((s) => s.getStudentNotifications);
+  const markNotifsRead     = useAppStore((s) => s.markNotifsRead);
   const scrollBottom       = useScrollBottomForTabBar();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -53,8 +54,11 @@ export default function StudentNotifications() {
 
   useFocusEffect(
     useCallback(() => {
-      if (currentUser) fetchNotifications(currentUser.id);
-    }, [currentUser, fetchNotifications])
+      if (currentUser) {
+        fetchNotifications(currentUser.id);
+        markNotifsRead();
+      }
+    }, [currentUser, fetchNotifications, markNotifsRead])
   );
 
   const rows: RowItem[] = useMemo(() => {

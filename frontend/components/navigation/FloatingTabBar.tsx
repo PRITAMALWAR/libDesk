@@ -50,6 +50,8 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
             size: 24,
           }) ?? null;
 
+        const badge = options.tabBarBadge;
+
         return (
           <Pressable
             key={route.key}
@@ -68,6 +70,13 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
             {/* Icon wrapper — active gets a soft tinted bg bubble */}
             <View style={[styles.iconWrap, isFocused && styles.iconWrapActive]}>
               {icon}
+              {badge !== undefined && badge !== null && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeTxt}>
+                    {typeof badge === 'number' && badge > 9 ? '9+' : String(badge)}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Label — always visible */}
@@ -138,5 +147,27 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.1,
+  },
+
+  // Unread badge
+  badge: {
+    position: 'absolute',
+    top: 2,
+    right: 4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  badgeTxt: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#fff',
+    lineHeight: 12,
   },
 });

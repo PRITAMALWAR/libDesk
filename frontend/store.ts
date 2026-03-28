@@ -72,6 +72,7 @@ interface AppState {
   attendances: Attendance[];
   notifications: Notification[];
   dailyQrToken: string | null;
+  lastNotifSeenAt: string | null;
 
   // Auth
   login: (usernameOrMobile: string, pin: string) => Promise<{ ok: boolean; message?: string }>;
@@ -106,6 +107,8 @@ interface AppState {
   getTodayAttendance: () => Attendance[];
   getStudentAttendance: (studentId: string) => Attendance[];
   getStudentNotifications: (studentId: string) => Notification[];
+  markNotifsRead: () => void;
+  getUnreadNotifCount: (studentId: string) => number;
 }
 
 const initialAdmin: User = {
@@ -154,6 +157,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     },
   ],
   dailyQrToken: null,
+  lastNotifSeenAt: null,
 
   login: async (usernameOrMobile, pin) => {
     try {
@@ -461,5 +465,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     return studentNotifs;
+  },
+
+  markNotifsRead: () => {
+    set({ lastNotifSeenAt: new Date().toISOString() });
+  },
+
+  getUnreadNotifCount: (studentId) => {
+    const { notifications, lastNotifSeenAt } = get();
+    const cutoff = lastNotifSeenAt ? new Date(lastNotifSeenAt).getTime() : 0;
+    return notifications.filter(
+      (n) =>
+        (n.targetId === 'all' || n.targetId === studentId) &&
+        new Date(n.date).getTime() > cutoff
+    ).length;
   },
 }));
