@@ -46,8 +46,8 @@ cp backend/.env.example backend/.env
 ```env
 MONGODB_URI=mongodb://127.0.0.1:27017/library_student_management
 PORT=5000
-ADMIN_USERNAME=admin
-ADMIN_PIN=admin@123
+ADMIN_USERNAME=
+ADMIN_PIN=
 ADMIN_MOBILE=0000000000
 ```
 
