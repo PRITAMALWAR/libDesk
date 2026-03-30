@@ -101,6 +101,7 @@ interface AppState {
   ) => Promise<{ ok: boolean; message?: string }>;
 
   // Student - Attendance
+  fetchStudentAttendance: (studentId: string, year?: number, month?: number) => Promise<void>;
   markAttendance: (token: string) => Promise<{ ok: boolean; alreadyMarked?: boolean; message?: string }>;
 
   // Helpers
@@ -180,11 +181,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         users:
           authenticatedUser.role === 'admin'
             ? [authenticatedUser, ...state.users.filter((u) => u.role === 'student')]
-            : [initialAdmin, ...state.users.filter((u) => u.role === 'student' || u.id === authenticatedUser.id)],
+            // Always include the logged-in student in users so getStudentNotifications can find them
+            : [initialAdmin, authenticatedUser, ...state.users.filter((u) => u.role === 'student' && u.id !== authenticatedUser.id)],
       }));
 
       if (authenticatedUser.role === 'admin') {
         await get().fetchStudents();
+      } else {
+        // Fetch student's notifications and attendance on login
+        await Promise.all([
+          get().fetchNotifications(authenticatedUser.id),
+          get().fetchStudentAttendance(authenticatedUser.id),
+        ]);
       }
 
       return { ok: true };
@@ -388,6 +396,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  fetchStudentAttendance: async (studentId, year, month) => {
+    try {
+      const now = new Date();
+      const y = year ?? now.getFullYear();
+      const m = month ?? (now.getMonth() + 1);
+      const res = await fetch(`${API_URL}/api/attendance/student/${studentId}?year=${y}&month=${m}`);
+      if (!res.ok) return;
+      const items = (await res.json()) as { date: string; status: string }[];
+      const mapped: Attendance[] = items.map((item) => ({
+        id: `${studentId}-${item.date}`,
+        studentId,
+        date: item.date,
+      }));
+      set((state) => {
+        // Merge: keep non-student or other-month records, add fresh ones
+        const others = state.attendances.filter(
+          (a) => a.studentId !== studentId || !a.date.startsWith(`${y}-${String(m).padStart(2, '0')}`)
+        );
+        return { attendances: [...others, ...mapped] };
+      });
+    } catch {
+      // Silently ignore — user sees stale data but app doesn't crash
+    }
+  },
+
   markAttendance: async (token) => {
     const { currentUser, authToken } = get();
     if (!currentUser || currentUser.role !== 'student') {
@@ -417,7 +450,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         return { ok: false, message };
       }
       const data = (await response.json()) as { ok: boolean; alreadyMarked?: boolean; message?: string };
-      await get().fetchTodayAttendance();
+      const { currentUser: cu } = get();
+      if (cu) await get().fetchStudentAttendance(cu.id);
       return { ok: true, alreadyMarked: Boolean(data.alreadyMarked), message: data.message };
     } catch {
       return { ok: false, message: `Backend unavailable (${API_URL})` };
@@ -436,8 +470,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   getStudentNotifications: (studentId) => {
-    const { notifications, users } = get();
-    const student = users.find((u) => u.id === studentId);
+    const { notifications, users, currentUser } = get();
+    // Fallback to currentUser so the function works even if users list isn't populated yet
+    const student = users.find((u) => u.id === studentId)
+      ?? (currentUser?.id === studentId ? currentUser : null);
     if (!student) return [];
 
     const studentNotifs = notifications.filter((n) => n.targetId === 'all' || n.targetId === studentId);

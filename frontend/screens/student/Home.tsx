@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppStore } from '../../store';
 import { Ionicons } from '@expo/vector-icons';
 import { differenceInDays, format } from 'date-fns';
@@ -22,8 +22,19 @@ export default function StudentHome() {
   const attendances = useAppStore((s) => s.attendances);
   const notifications = useAppStore((s) => s.notifications);
   const users = useAppStore((s) => s.users);
-  const getStudentNotifications = useAppStore((s) => s.getStudentNotifications);
-  const scrollBottom = useScrollBottomForTabBar();
+  const getStudentNotifications   = useAppStore((s) => s.getStudentNotifications);
+  const fetchNotifications        = useAppStore((s) => s.fetchNotifications);
+  const fetchStudentAttendance    = useAppStore((s) => s.fetchStudentAttendance);
+  const scrollBottom              = useScrollBottomForTabBar();
+
+  useFocusEffect(
+    useCallback(() => {
+      if (currentUser) {
+        fetchNotifications(currentUser.id);
+        fetchStudentAttendance(currentUser.id);
+      }
+    }, [currentUser, fetchNotifications, fetchStudentAttendance])
+  );
 
   const studentAttendances = useMemo(
     () => (currentUser ? attendances.filter((a) => a.studentId === currentUser.id) : []),

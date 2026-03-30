@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  Image,
+  Platform,
 } from 'react-native';
 import { useAppStore } from '../../store';
 import { Ionicons } from '@expo/vector-icons';
@@ -241,45 +243,70 @@ export default function AdminDashboard() {
             <Text style={styles.seeAll}>See all</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.listCard}>
-          {recentStudents.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <Ionicons name="people-outline" size={40} color="#CBD5E1" />
-              <Text style={styles.emptyTitle}>No students yet</Text>
-              <Text style={styles.emptySub}>Add a student to start tracking memberships and attendance.</Text>
-              <TouchableOpacity style={styles.emptyCta} onPress={() => goForm()}>
-                <Text style={styles.emptyCtaText}>Add first student</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            recentStudents.map((student, idx) => (
-              <TouchableOpacity
-                key={student.id}
-                style={[styles.rowItem, idx < recentStudents.length - 1 && styles.rowBorder]}
-                onPress={() => goForm(student.id)}
-                activeOpacity={0.75}
-              >
-                <View style={styles.rowLeft}>
-                  <View style={[styles.avatar, student.isBlocked && styles.avatarBlocked]}>
-                    <Text style={styles.avatarText}>{student.name.charAt(0).toUpperCase()}</Text>
-                  </View>
-                  <View style={styles.rowText}>
-                    <Text style={styles.rowName} numberOfLines={1}>
-                      {student.name}
-                    </Text>
-                    <Text style={styles.rowMeta} numberOfLines={1}>
+
+        {recentStudents.length === 0 ? (
+          <View style={[styles.listCard, styles.emptyBox]}>
+            <Ionicons name="people-outline" size={40} color="#CBD5E1" />
+            <Text style={styles.emptyTitle}>No students yet</Text>
+            <Text style={styles.emptySub}>Add a student to start tracking memberships.</Text>
+            <TouchableOpacity style={styles.emptyCta} onPress={() => goForm()}>
+              <Text style={styles.emptyCtaText}>Add first student</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.studentGrid}>
+            {recentStudents.map((student) => {
+              const daysLeft   = differenceInDays(new Date(student.expiryDate), new Date());
+              const isExpired  = daysLeft < 0;
+              const isExpiring = !isExpired && daysLeft <= 7;
+              const statusColor = student.isBlocked ? '#DC2626' : isExpired ? '#DC2626' : isExpiring ? '#D97706' : '#10B981';
+              const statusLabel = student.isBlocked ? 'Blocked' : isExpired ? 'Expired' : isExpiring ? `${daysLeft}d left` : 'Active';
+              const statusBg    = student.isBlocked ? '#FEE2E2' : isExpired ? '#FEF2F2' : isExpiring ? '#FFFBEB' : '#ECFDF5';
+              const feeColor    = student.feeStatus === 'Paid' ? '#059669' : student.feeStatus === 'Half Paid' ? '#D97706' : '#DC2626';
+
+              return (
+                <TouchableOpacity
+                  key={student.id}
+                  onPress={() => goForm(student.id)}
+                  activeOpacity={0.85}
+                  style={styles.scRow}
+                >
+                  {/* Left accent */}
+                  <View style={[styles.scAccent, { backgroundColor: statusColor }]} />
+
+                  {/* Avatar */}
+                  {student.photoUrl
+                    ? <Image source={{ uri: student.photoUrl }} style={styles.scPhoto} />
+                    : <View style={[styles.scInitialBox, { backgroundColor: statusColor + '18' }]}>
+                        <Text style={[styles.scInitial, { color: statusColor }]}>
+                          {student.name.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                  }
+
+                  {/* Info */}
+                  <View style={styles.scInfo}>
+                    <Text style={styles.scName} numberOfLines={1}>{student.name}</Text>
+                    <Text style={styles.scSub} numberOfLines={1}>
                       @{student.username} · {student.mobile}
                     </Text>
                   </View>
-                </View>
-                <View style={styles.rowRight}>
-                  <FeePill status={student.feeStatus} />
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
+
+                  {/* Right: status + fee */}
+                  <View style={styles.scRight}>
+                    <View style={[styles.scStatusBadge, { backgroundColor: statusBg }]}>
+                      <View style={[styles.scStatusDot, { backgroundColor: statusColor }]} />
+                      <Text style={[styles.scStatusTxt, { color: statusColor }]}>{statusLabel}</Text>
+                    </View>
+                    <Text style={[styles.scFeeTxt, { color: feeColor }]}>{student.feeStatus}</Text>
+                  </View>
+
+                  <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -454,37 +481,48 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...theme.shadow.card,
   },
-  rowItem: {
+
+  // ── Recent students list ──
+  studentGrid: {
+    marginHorizontal: theme.spacing.md,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    overflow: 'hidden',
+    ...Platform.select({
+      ios:     { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: 12 },
+      android: { elevation: 3 },
+    }),
+  },
+  scRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingRight: 14,
+    gap: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#F8FAFC',
   },
-  rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  rowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
-  rowText: { flex: 1, minWidth: 0 },
-  rowRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: '#EEF2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
+  scAccent: { width: 4, alignSelf: 'stretch' },
+  scPhoto: { width: 42, height: 42, borderRadius: 21 },
+  scInitialBox: {
+    width: 42, height: 42, borderRadius: 21,
+    alignItems: 'center', justifyContent: 'center',
   },
-  avatarBlocked: { backgroundColor: '#FEE2E2' },
-  avatarText: { fontSize: 18, fontWeight: '800', color: '#4338CA' },
-  rowName: { fontSize: 15, fontWeight: '800', color: theme.colors.text },
-  rowMeta: { marginTop: 2, fontSize: 12, color: theme.colors.mutedText, fontWeight: '600' },
-  feePill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, maxWidth: 100 },
-  feePillText: { fontSize: 10, fontWeight: '800' },
-  feePaid: { backgroundColor: '#DCFCE7' },
-  feePaidT: { color: '#166534' },
-  feeHalf: { backgroundColor: '#FEF3C7' },
-  feeHalfT: { color: '#92400E' },
-  feePending: { backgroundColor: '#FEE2E2' },
-  feePendingT: { color: '#991B1B' },
+  scInitial:    { fontSize: 17, fontWeight: '800' },
+  scInfo:       { flex: 1, minWidth: 0 },
+  scName:       { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+  scSub:        { fontSize: 11, fontWeight: '500', color: '#94A3B8', marginTop: 1 },
+  scRight:      { alignItems: 'flex-end', gap: 4 },
+  scStatusBadge:{
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+  },
+  scStatusDot:  { width: 6, height: 6, borderRadius: 3 },
+  scStatusTxt:  { fontSize: 10, fontWeight: '700' },
+  scFeeTxt:     { fontSize: 10, fontWeight: '600' },
+
   emptyBox: { alignItems: 'center', paddingVertical: 32, paddingHorizontal: 20 },
   emptyTitle: { marginTop: 12, fontSize: 17, fontWeight: '800', color: theme.colors.text },
   emptySub: { marginTop: 6, fontSize: 13, color: theme.colors.mutedText, textAlign: 'center', lineHeight: 20 },

@@ -63,6 +63,7 @@ function StudentTabs() {
     const cutoff = lastNotifSeenAt ? new Date(lastNotifSeenAt).getTime() : 0;
     return notifications.filter(
       (n) =>
+        !n.id.startsWith('sys-') && // exclude auto-generated system notifications
         (n.targetId === 'all' || n.targetId === currentUser.id) &&
         new Date(n.date).getTime() > cutoff
     ).length;

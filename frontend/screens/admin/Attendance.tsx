@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  Image,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Print from 'expo-print';
@@ -113,24 +114,34 @@ export default function AdminAttendance() {
 
   const renderRow = (item: (typeof attendances)[0], index: number) => {
     const student = users.find((u) => u.id === item.studentId);
-    const last = index === attendances.length - 1;
+
     return (
-      <View key={item.id} style={[styles.listRow, !last && styles.listRowBorder]}>
-        <View style={styles.rowLeft}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarTxt}>{(student?.name || '?').charAt(0).toUpperCase()}</Text>
-          </View>
-          <View style={styles.rowText}>
-            <Text style={styles.rowName} numberOfLines={1}>
-              {student?.name || 'Student'}
-            </Text>
-            <Text style={styles.rowSub} numberOfLines={1}>
-              @{student?.username || '—'}
-            </Text>
-          </View>
+      <View key={item.id} style={styles.entryCard}>
+        {/* Avatar */}
+        <View style={styles.entryAvatar}>
+          {student?.photoUrl
+            ? <Image source={{ uri: student.photoUrl }} style={styles.entryAvatarImg} />
+            : <Text style={styles.entryAvatarTxt}>
+                {(student?.name || '?').charAt(0).toUpperCase()}
+              </Text>
+          }
         </View>
-        <View style={styles.timePill}>
-          <Text style={styles.timePillTxt}>{format(new Date(item.date), 'h:mm a')}</Text>
+
+        {/* Username */}
+        <Text style={styles.entryUsername} numberOfLines={1}>
+          @{student?.username || '—'}
+        </Text>
+
+        {/* Spacer */}
+        <View style={{ flex: 1 }} />
+
+        {/* Time */}
+        <Text style={styles.entryTime}>{format(new Date(item.date), 'h:mm a')}</Text>
+
+        {/* Present badge */}
+        <View style={styles.presentBadge}>
+          <Ionicons name="checkmark-circle" size={12} color="#059669" />
+          <Text style={styles.presentTxt}>Present</Text>
         </View>
       </View>
     );
@@ -250,20 +261,32 @@ export default function AdminAttendance() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366F1" />}
       >
         {topSection}
-        <Text style={styles.listTitle}>Check-ins</Text>
-        <View style={styles.listCard}>
-          {attendances.length === 0 ? (
-            <View style={styles.emptyInner}>
-              <View style={styles.emptyCircle}>
-                <Ionicons name="checkmark-done-outline" size={32} color="#C7D2FE" />
-              </View>
-              <Text style={styles.emptyTitle}>No check-ins</Text>
-              <Text style={styles.emptySub}>For this day, nobody has scanned yet.</Text>
+        {/* Check-ins header */}
+        <View style={styles.checkHeader}>
+          <View style={styles.checkHeaderLeft}>
+            <Ionicons name="checkmark-done-circle" size={18} color="#4F46E5" />
+            <Text style={styles.listTitle}>Check-ins</Text>
+          </View>
+          {attendances.length > 0 && (
+            <View style={styles.checkCount}>
+              <Text style={styles.checkCountTxt}>{attendances.length} entries</Text>
             </View>
-          ) : (
-            attendances.map((item, index) => renderRow(item, index))
           )}
         </View>
+
+        {attendances.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyCircle}>
+              <Ionicons name="checkmark-done-outline" size={32} color="#C7D2FE" />
+            </View>
+            <Text style={styles.emptyTitle}>No check-ins yet</Text>
+            <Text style={styles.emptySub}>Nobody has scanned for this day.</Text>
+          </View>
+        ) : (
+          <View style={styles.entriesList}>
+            {attendances.map((item, index) => renderRow(item, index))}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -386,70 +409,63 @@ const styles = StyleSheet.create({
   dateHuman: { marginTop: 4, fontSize: 16, fontWeight: '800', color: theme.colors.text },
   dateDoneIos: { alignItems: 'flex-end', paddingVertical: 6, paddingHorizontal: 4 },
   dateDoneTxt: { fontSize: 16, fontWeight: '800', color: '#4F46E5' },
-  listTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#1E293B',
-    marginBottom: 10,
-    letterSpacing: -0.3,
+  // ── Check-in header ──
+  checkHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 10,
   },
-  listRow: {
+  checkHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  listTitle: { fontSize: 16, fontWeight: '800', color: '#1E293B', letterSpacing: -0.3 },
+  checkCount: {
+    backgroundColor: '#EEF2FF', paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 8,
+  },
+  checkCountTxt: { fontSize: 12, fontWeight: '700', color: '#4F46E5' },
+
+  // ── Entry cards ──
+  entriesList: { gap: 8, marginBottom: 24 },
+  entryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  listRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#F1F5F9',
-  },
-  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 },
-  avatar: {
-    width: 44,
-    height: 44,
+    backgroundColor: '#fff',
     borderRadius: 14,
+    paddingVertical: 12, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: '#F1F5F9',
+    gap: 10,
+    ...Platform.select({
+      ios:     { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8 },
+      android: { elevation: 2 },
+    }),
+  },
+  entryAvatar: {
+    width: 40, height: 40, borderRadius: 20,
     backgroundColor: '#EEF2FF',
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  entryAvatarImg: { width: 40, height: 40, borderRadius: 20 },
+  entryAvatarTxt: { fontSize: 16, fontWeight: '800', color: '#4F46E5' },
+  entryUsername: { fontSize: 14, fontWeight: '700', color: '#334155' },
+  entryTime:   { fontSize: 13, fontWeight: '700', color: '#475569' },
+  presentBadge:{
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 8,
+  },
+  presentTxt: { fontSize: 11, fontWeight: '700', color: '#059669' },
+
+  // ── Empty ──
+  emptyCard: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarTxt: { fontSize: 17, fontWeight: '800', color: '#4338CA' },
-  rowText: { flex: 1, minWidth: 0 },
-  rowName: { fontSize: 16, fontWeight: '800', color: theme.colors.text },
-  rowSub: { marginTop: 2, fontSize: 13, fontWeight: '600', color: theme.colors.mutedText },
-  timePill: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  timePillTxt: { fontSize: 13, fontWeight: '800', color: '#475569' },
-  listCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    overflow: 'hidden',
+    backgroundColor: '#fff', borderRadius: 16,
+    paddingVertical: 40, paddingHorizontal: 20,
     marginBottom: 24,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  emptyInner: {
-    alignItems: 'center',
-    paddingVertical: 36,
-    paddingHorizontal: 16,
+    borderWidth: 1, borderColor: '#F1F5F9',
   },
   emptyCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 72, height: 72, borderRadius: 36,
     backgroundColor: '#EEF2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   emptyTitle: { marginTop: 14, fontSize: 17, fontWeight: '800', color: theme.colors.text },
-  emptySub: { marginTop: 6, fontSize: 14, color: theme.colors.mutedText, textAlign: 'center', paddingHorizontal: 24 },
+  emptySub:   { marginTop: 6, fontSize: 14, color: theme.colors.mutedText, textAlign: 'center' },
 });
