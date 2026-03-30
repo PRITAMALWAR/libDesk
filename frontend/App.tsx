@@ -15,6 +15,7 @@ import AdminStudents from './screens/admin/Students';
 import AdminStudentForm from './screens/admin/StudentForm';
 import AdminAttendance from './screens/admin/Attendance';
 import AdminNotifications from './screens/admin/Notifications';
+import AdminFees from './screens/admin/Fees';
 import StudentHome from './screens/student/Home';
 import StudentScanQR from './screens/student/ScanQR';
 import StudentNotifications from './screens/student/Notifications';
@@ -239,6 +240,18 @@ export default function App() {
               options={{
                 headerShown: true,
                 title: 'Student Details',
+                headerStyle: { backgroundColor: theme.colors.surface },
+                headerTintColor: theme.colors.text,
+                headerTitleStyle: { fontWeight: '700' },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="AdminFees"
+              component={AdminFees}
+              options={{
+                headerShown: true,
+                title: 'Fee Management',
                 headerStyle: { backgroundColor: theme.colors.surface },
                 headerTintColor: theme.colors.text,
                 headerTitleStyle: { fontWeight: '700' },

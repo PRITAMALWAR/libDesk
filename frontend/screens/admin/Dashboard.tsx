@@ -1,43 +1,42 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  Alert,
-  Image,
-  Platform,
+  View, Text, StyleSheet, ScrollView,
+  TouchableOpacity, RefreshControl, Alert,
+  Image, Platform,
 } from 'react-native';
 import { useAppStore } from '../../store';
 import { Ionicons } from '@expo/vector-icons';
-import { differenceInDays, format } from 'date-fns';
+import { differenceInDays, format, formatDistanceToNow, isToday, subDays } from 'date-fns';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { theme } from '../../theme';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useScrollBottomForTabBar } from '../../hooks/useScrollBottomForTabBar';
 
-type QuickAction = {
-  key: string;
+type ActivityItem = {
+  id: string;
+  type: 'checkin' | 'joined' | 'notification' | 'expired';
   label: string;
   sub: string;
+  date: string;
+  photoUrl?: string | null;
+  initial?: string;
+  iconColor: string;
+  iconBg: string;
   icon: keyof typeof Ionicons.glyphMap;
-  color: string;
-  bg: string;
-  onPress: () => void;
 };
 
 export default function AdminDashboard() {
-  const navigation = useNavigation<any>();
-  const currentUser = useAppStore((s) => s.currentUser);
-  const users = useAppStore((s) => s.users);
-  const notifications = useAppStore((s) => s.notifications);
-  const fetchStudents = useAppStore((s) => s.fetchStudents);
+  const navigation           = useNavigation<any>();
+  const currentUser          = useAppStore((s) => s.currentUser);
+  const users                = useAppStore((s) => s.users);
+  const notifications        = useAppStore((s) => s.notifications);
+  const attendances          = useAppStore((s) => s.attendances);
+  const fetchStudents        = useAppStore((s) => s.fetchStudents);
   const fetchTodayAttendance = useAppStore((s) => s.fetchTodayAttendance);
-  const fetchNotifications = useAppStore((s) => s.fetchNotifications);
-  const getTodayAttendance = useAppStore((s) => s.getTodayAttendance);
-  const logout = useAppStore((s) => s.logout);
+  const fetchNotifications   = useAppStore((s) => s.fetchNotifications);
+  const getTodayAttendance   = useAppStore((s) => s.getTodayAttendance);
+  const logout               = useAppStore((s) => s.logout);
+  const scrollBottom         = useScrollBottomForTabBar();
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -49,489 +48,445 @@ export default function AdminDashboard() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    try {
-      await Promise.all([fetchStudents(), fetchTodayAttendance(), fetchNotifications()]);
-    } finally {
-      setRefreshing(false);
-    }
+    try { await Promise.all([fetchStudents(), fetchTodayAttendance(), fetchNotifications()]); }
+    finally { setRefreshing(false); }
   }, [fetchStudents, fetchTodayAttendance, fetchNotifications]);
 
-  const students = useMemo(() => users.filter((u) => u.role === 'student'), [users]);
-  const totalStudents = students.length;
-  const todayList = getTodayAttendance();
-  const todayAttendance = todayList.length;
-  const activeStudents = students.filter((s) => differenceInDays(new Date(s.expiryDate), new Date()) >= 0).length;
-  const expiredStudents = students.filter((s) => differenceInDays(new Date(s.expiryDate), new Date()) < 0).length;
-  const blockedStudents = students.filter((s) => s.isBlocked).length;
-  const pendingFee = students.filter((s) => s.feeStatus === 'Pending').length;
-  const halfPaid = students.filter((s) => s.feeStatus === 'Half Paid').length;
-  const paidFull = students.filter((s) => s.feeStatus === 'Paid').length;
+  const students        = useMemo(() => users.filter((u) => u.role === 'student'), [users]);
+  const todayList       = getTodayAttendance();
+  const todayCount      = todayList.length;
+  const total           = students.length;
+  const activeCount     = students.filter((s) => !s.isBlocked && differenceInDays(new Date(s.expiryDate), new Date()) >= 0).length;
+  const expiredCount    = students.filter((s) => differenceInDays(new Date(s.expiryDate), new Date()) < 0).length;
+  const blockedCount    = students.filter((s) => s.isBlocked).length;
+  const pendingFeeCount = students.filter((s) => s.feeStatus !== 'Paid').length;
+  const attendancePct   = total > 0 ? Math.round((todayCount / total) * 100) : 0;
 
-  const attendanceRate =
-    totalStudents > 0 ? Math.round((todayAttendance / totalStudents) * 100) : 0;
+  // ── Recent activity feed ──────────────────────────────────────────────────
+  const activityFeed: ActivityItem[] = useMemo(() => {
+    const items: ActivityItem[] = [];
 
-  const recentStudents = useMemo(
-    () =>
-      [...students].sort((a, b) => new Date(b.joinDate).getTime() - new Date(a.joinDate).getTime()).slice(0, 6),
-    [students]
-  );
+    // Today's check-ins
+    for (const a of todayList) {
+      const s = users.find((u) => u.id === a.studentId);
+      items.push({
+        id: `ci-${a.id}`,
+        type: 'checkin',
+        label: s?.name ?? 'Unknown student',
+        sub: 'Scanned attendance QR',
+        date: a.date,
+        photoUrl: s?.photoUrl,
+        initial: (s?.name ?? '?').charAt(0).toUpperCase(),
+        icon: 'qr-code',
+        iconColor: '#6366F1',
+        iconBg: '#EEF2FF',
+      });
+    }
+
+    // Recently joined (last 14 days)
+    const cutoff = subDays(new Date(), 14).getTime();
+    for (const s of students) {
+      if (new Date(s.joinDate).getTime() >= cutoff) {
+        items.push({
+          id: `join-${s.id}`,
+          type: 'joined',
+          label: s.name,
+          sub: 'New member joined',
+          date: s.joinDate,
+          photoUrl: s.photoUrl,
+          initial: s.name.charAt(0).toUpperCase(),
+          icon: 'person-add',
+          iconColor: '#10B981',
+          iconBg: '#ECFDF5',
+        });
+      }
+    }
+
+    // Recent notifications (last 7 days)
+    for (const n of notifications.slice(0, 5)) {
+      items.push({
+        id: `notif-${n.id}`,
+        type: 'notification',
+        label: n.title,
+        sub: 'Notification sent to students',
+        date: n.date,
+        icon: 'megaphone',
+        iconColor: '#F59E0B',
+        iconBg: '#FFFBEB',
+      });
+    }
+
+    // Sort newest first, take top 8
+    return items
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 8);
+  }, [todayList, students, notifications, users]);
 
   const parentNav = () => navigation.getParent();
+  const goForm    = (id?: string) => parentNav()?.navigate('AdminStudentForm', id ? { studentId: id } : undefined);
 
-  const goForm = (studentId?: string) => {
-    parentNav()?.navigate('AdminStudentForm', studentId ? { studentId } : undefined);
-  };
-
-  const quickActions: QuickAction[] = useMemo(
-    () => [
-      {
-        key: 'add',
-        label: 'Add student',
-        sub: 'New membership',
-        icon: 'person-add',
-        color: '#1D4ED8',
-        bg: '#DBEAFE',
-        onPress: () => goForm(),
-      },
-      {
-        key: 'students',
-        label: 'All students',
-        sub: `${totalStudents} total`,
-        icon: 'people',
-        color: '#047857',
-        bg: '#D1FAE5',
-        onPress: () => navigation.navigate('Students'),
-      },
-      {
-        key: 'attendance',
-        label: 'Attendance',
-        sub: 'QR & records',
-        icon: 'qr-code',
-        color: '#6D28D9',
-        bg: '#EDE9FE',
-        onPress: () => navigation.navigate('Attendance'),
-      },
-      {
-        key: 'notify',
-        label: 'Alerts',
-        sub: `${notifications.length} items`,
-        icon: 'notifications',
-        color: '#B45309',
-        bg: '#FEF3C7',
-        onPress: () => navigation.navigate('Notifications'),
-      },
-    ],
-    [navigation, totalStudents, notifications.length]
-  );
-
-  const onLogout = () => {
+  const onLogout = () =>
     Alert.alert('Logout', 'Sign out of the admin panel?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: () => logout() },
+      { text: 'Logout', style: 'destructive', onPress: logout },
     ]);
-  };
 
-  const adminName = currentUser?.name ?? 'Admin';
-  const scrollBottom = useScrollBottomForTabBar();
+  const hour     = new Date().getHours();
+  const greeting = hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening';
+  const name     = currentUser?.name ?? 'Admin';
 
   return (
     <SafeAreaView style={styles.safe} edges={['left', 'right']}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingBottom: scrollBottom }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366F1" />}
       >
-        {/* Header */}
-        <View style={styles.hero}>
-          <View style={styles.heroTop}>
-            <View>
-              <Text style={styles.heroKicker}>Library admin</Text>
-              <Text style={styles.heroTitle}>Hello, {adminName}</Text>
-              <Text style={styles.heroDate}>{format(new Date(), 'EEEE, d MMMM yyyy')}</Text>
-            </View>
-            <TouchableOpacity style={styles.logoutBtn} onPress={onLogout} accessibilityLabel="Logout">
-              <Ionicons name="log-out-outline" size={22} color="#FECACA" />
-            </TouchableOpacity>
-          </View>
 
-          <View style={styles.heroStat}>
-            <View style={styles.heroStatLeft}>
-              <Text style={styles.heroStatLabel}>Present today</Text>
-              <Text style={styles.heroStatValue}>
-                {todayAttendance}
-                <Text style={styles.heroStatSlash}> / {totalStudents}</Text>
-              </Text>
-            </View>
-            <View style={styles.ringWrap}>
-              <Text style={styles.ringText}>{attendanceRate}%</Text>
-              <Text style={styles.ringSub}>check-in</Text>
-            </View>
+        {/* ── Header ── */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>Good {greeting}, {name} 👋</Text>
+            <Text style={styles.subDate}>{format(new Date(), 'EEEE, d MMMM yyyy')}</Text>
           </View>
+          <TouchableOpacity onPress={onLogout} style={styles.logoutBtn}>
+            <Ionicons name="log-out-outline" size={19} color="#EF4444" />
+          </TouchableOpacity>
         </View>
 
-        {/* Quick actions */}
-        <Text style={styles.sectionLabel}>Quick actions</Text>
-        <View style={styles.actionGrid}>
-          {quickActions.map((a) => (
-            <TouchableOpacity key={a.key} style={styles.actionTile} onPress={a.onPress} activeOpacity={0.88}>
-              <View style={[styles.actionIcon, { backgroundColor: a.bg }]}>
-                <Ionicons name={a.icon} size={22} color={a.color} />
-              </View>
-              <Text style={styles.actionTitle}>{a.label}</Text>
-              <Text style={styles.actionSub}>{a.sub}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* KPI row */}
-        <Text style={styles.sectionLabel}>Overview</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kpiScroll}>
-          <View style={[styles.kpiCard, styles.kpiIndigo]}>
-            <Ionicons name="school-outline" size={20} color="#C7D2FE" />
-            <Text style={styles.kpiVal}>{totalStudents}</Text>
-            <Text style={styles.kpiLab}>Students</Text>
-          </View>
-          <View style={[styles.kpiCard, styles.kpiGreen]}>
-            <Ionicons name="shield-checkmark-outline" size={20} color="#A7F3D0" />
-            <Text style={styles.kpiVal}>{activeStudents}</Text>
-            <Text style={styles.kpiLab}>Active</Text>
-          </View>
-          <View style={[styles.kpiCard, styles.kpiAmber]}>
-            <Ionicons name="wallet-outline" size={20} color="#FDE68A" />
-            <Text style={styles.kpiVal}>{pendingFee + halfPaid}</Text>
-            <Text style={styles.kpiLab}>Fee follow-up</Text>
-          </View>
-          <View style={[styles.kpiCard, styles.kpiRed]}>
-            <Ionicons name="alert-circle-outline" size={20} color="#FECACA" />
-            <Text style={styles.kpiVal}>{expiredStudents + blockedStudents}</Text>
-            <Text style={styles.kpiLab}>Attention</Text>
-          </View>
+        {/* ── Today summary row ── */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
+          <StatChip label="Total" value={total}        color="#6366F1" icon="people" />
+          <StatChip label="Today" value={todayCount}   color="#8B5CF6" icon="calendar" />
+          <StatChip label="Active" value={activeCount} color="#10B981" icon="shield-checkmark" />
+          <StatChip label="Expired" value={expiredCount} color="#EF4444" icon="time" />
+          <StatChip label="Fee Due" value={pendingFeeCount} color="#F59E0B" icon="wallet" />
         </ScrollView>
 
-        {/* Insight chips */}
-        <View style={styles.chipsRow}>
-          {expiredStudents > 0 && (
-            <View style={[styles.chip, styles.chipWarn]}>
-              <Ionicons name="time-outline" size={14} color="#92400E" />
-              <Text style={styles.chipText}>{expiredStudents} expired</Text>
+        {/* ── Attendance banner ── */}
+        <LinearGradient
+          colors={['#4338CA', '#6D28D9']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={styles.banner}
+        >
+          <View style={styles.bannerCircle} />
+          <View style={styles.bannerLeft}>
+            <Text style={styles.bannerEyebrow}>TODAY'S ATTENDANCE</Text>
+            <View style={styles.bannerCountRow}>
+              <Text style={styles.bannerCount}>{todayCount}</Text>
+              <Text style={styles.bannerOf}>/{total} students</Text>
             </View>
-          )}
-          {blockedStudents > 0 && (
-            <View style={[styles.chip, styles.chipBad]}>
-              <Ionicons name="ban-outline" size={14} color="#991B1B" />
-              <Text style={styles.chipText}>{blockedStudents} blocked</Text>
+            <View style={styles.bannerBarBg}>
+              <View style={[styles.bannerBarFill, { width: `${attendancePct}%` as any }]} />
             </View>
-          )}
-          {halfPaid > 0 && (
-            <View style={[styles.chip, styles.chipSoft]}>
-              <Ionicons name="pie-chart-outline" size={14} color="#B45309" />
-              <Text style={styles.chipText}>{halfPaid} half paid</Text>
-            </View>
-          )}
-          {paidFull > 0 && expiredStudents === 0 && blockedStudents === 0 && halfPaid === 0 && (
-            <View style={[styles.chip, styles.chipOk]}>
-              <Ionicons name="checkmark-circle-outline" size={14} color="#166534" />
-              <Text style={styles.chipText}>Fees on track</Text>
-            </View>
-          )}
+            <Text style={styles.bannerPct}>{attendancePct}% attendance rate</Text>
+          </View>
+          <TouchableOpacity style={styles.bannerAction} onPress={() => navigation.navigate('Attendance')}>
+            <Ionicons name="qr-code-outline" size={24} color="#fff" />
+            <Text style={styles.bannerActionTxt}>Open QR</Text>
+          </TouchableOpacity>
+        </LinearGradient>
+
+        {/* ── Quick actions ── */}
+        <View style={styles.actionsGrid}>
+          <QuickAction icon="person-add"  label="Add"        color="#6366F1" bg="#EEF2FF" onPress={() => goForm()} />
+          <QuickAction icon="people"      label="Students"   color="#10B981" bg="#ECFDF5" onPress={() => navigation.navigate('Students')} />
+          <QuickAction icon="qr-code"     label="Attendance" color="#8B5CF6" bg="#F5F3FF" onPress={() => navigation.navigate('Attendance')} />
+          <QuickAction icon="megaphone"   label="Notify"     color="#F59E0B" bg="#FFFBEB" onPress={() => navigation.navigate('Notifications')} />
+          <QuickAction icon="wallet"      label="Fees"       color="#0EA5E9" bg="#F0F9FF" onPress={() => parentNav()?.navigate('AdminFees')} />
         </View>
 
-        {/* Recent students */}
+        {/* ── Alerts ── */}
+        {(expiredCount > 0 || blockedCount > 0 || pendingFeeCount > 0) && (
+          <View style={styles.alertsWrap}>
+            {expiredCount > 0 && (
+              <TouchableOpacity style={[styles.alertPill, { backgroundColor: '#FEF2F2' }]} onPress={() => navigation.navigate('Students')}>
+                <Ionicons name="time" size={13} color="#EF4444" />
+                <Text style={[styles.alertPillTxt, { color: '#EF4444' }]}>{expiredCount} expired</Text>
+              </TouchableOpacity>
+            )}
+            {blockedCount > 0 && (
+              <TouchableOpacity style={[styles.alertPill, { backgroundColor: '#FEE2E2' }]} onPress={() => navigation.navigate('Students')}>
+                <Ionicons name="ban" size={13} color="#DC2626" />
+                <Text style={[styles.alertPillTxt, { color: '#DC2626' }]}>{blockedCount} blocked</Text>
+              </TouchableOpacity>
+            )}
+            {pendingFeeCount > 0 && (
+              <TouchableOpacity style={[styles.alertPill, { backgroundColor: '#FFFBEB' }]} onPress={() => parentNav()?.navigate('AdminFees')}>
+                <Ionicons name="cash" size={13} color="#D97706" />
+                <Text style={[styles.alertPillTxt, { color: '#D97706' }]}>{pendingFeeCount} fee due</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* ── Recent Activity ── */}
         <View style={styles.sectionHead}>
-          <Text style={styles.sectionLabelFlat}>Recent students</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Students')}>
+          <View style={styles.sectionTitleRow}>
+            <View style={styles.sectionDot} />
+            <Text style={styles.sectionTitle}>Recent Activity</Text>
+          </View>
+          <TouchableOpacity onPress={() => navigation.navigate('Attendance')}>
             <Text style={styles.seeAll}>See all</Text>
           </TouchableOpacity>
         </View>
 
-        {recentStudents.length === 0 ? (
-          <View style={[styles.listCard, styles.emptyBox]}>
-            <Ionicons name="people-outline" size={40} color="#CBD5E1" />
-            <Text style={styles.emptyTitle}>No students yet</Text>
-            <Text style={styles.emptySub}>Add a student to start tracking memberships.</Text>
-            <TouchableOpacity style={styles.emptyCta} onPress={() => goForm()}>
-              <Text style={styles.emptyCtaText}>Add first student</Text>
-            </TouchableOpacity>
+        {activityFeed.length === 0 ? (
+          <View style={styles.emptyActivity}>
+            <Ionicons name="pulse-outline" size={36} color="#CBD5E1" />
+            <Text style={styles.emptyTxt}>No recent activity</Text>
           </View>
         ) : (
-          <View style={styles.studentGrid}>
-            {recentStudents.map((student) => {
-              const daysLeft   = differenceInDays(new Date(student.expiryDate), new Date());
-              const isExpired  = daysLeft < 0;
-              const isExpiring = !isExpired && daysLeft <= 7;
-              const statusColor = student.isBlocked ? '#DC2626' : isExpired ? '#DC2626' : isExpiring ? '#D97706' : '#10B981';
-              const statusLabel = student.isBlocked ? 'Blocked' : isExpired ? 'Expired' : isExpiring ? `${daysLeft}d left` : 'Active';
-              const statusBg    = student.isBlocked ? '#FEE2E2' : isExpired ? '#FEF2F2' : isExpiring ? '#FFFBEB' : '#ECFDF5';
-              const feeColor    = student.feeStatus === 'Paid' ? '#059669' : student.feeStatus === 'Half Paid' ? '#D97706' : '#DC2626';
+          <View style={styles.activityCard}>
+            {activityFeed.map((item, idx) => {
+              let ago = '';
+              try { ago = formatDistanceToNow(new Date(item.date), { addSuffix: true }); } catch {}
+              const isLast = idx === activityFeed.length - 1;
 
               return (
-                <TouchableOpacity
-                  key={student.id}
-                  onPress={() => goForm(student.id)}
-                  activeOpacity={0.85}
-                  style={styles.scRow}
-                >
-                  {/* Left accent */}
-                  <View style={[styles.scAccent, { backgroundColor: statusColor }]} />
+                <View key={item.id} style={styles.activityItemWrap}>
+                  {/* Timeline line */}
+                  {!isLast && <View style={styles.timelineLine} />}
 
-                  {/* Avatar */}
-                  {student.photoUrl
-                    ? <Image source={{ uri: student.photoUrl }} style={styles.scPhoto} />
-                    : <View style={[styles.scInitialBox, { backgroundColor: statusColor + '18' }]}>
-                        <Text style={[styles.scInitial, { color: statusColor }]}>
-                          {student.name.charAt(0).toUpperCase()}
-                        </Text>
+                  <View style={styles.activityItem}>
+                    {/* Avatar or icon */}
+                    {(item.type === 'checkin' || item.type === 'joined') ? (
+                      <View style={styles.activityAvatar}>
+                        {item.photoUrl
+                          ? <Image source={{ uri: item.photoUrl }} style={styles.activityPhoto} />
+                          : <View style={[styles.activityInitialBox, { backgroundColor: item.iconBg }]}>
+                              <Text style={[styles.activityInitial, { color: item.iconColor }]}>{item.initial}</Text>
+                            </View>
+                        }
+                        {/* Type badge on avatar */}
+                        <View style={[styles.activityTypeBadge, { backgroundColor: item.iconBg }]}>
+                          <Ionicons name={item.icon} size={9} color={item.iconColor} />
+                        </View>
                       </View>
-                  }
+                    ) : (
+                      <View style={[styles.activityIconBox, { backgroundColor: item.iconBg }]}>
+                        <Ionicons name={item.icon} size={18} color={item.iconColor} />
+                      </View>
+                    )}
 
-                  {/* Info */}
-                  <View style={styles.scInfo}>
-                    <Text style={styles.scName} numberOfLines={1}>{student.name}</Text>
-                    <Text style={styles.scSub} numberOfLines={1}>
-                      @{student.username} · {student.mobile}
-                    </Text>
-                  </View>
-
-                  {/* Right: status + fee */}
-                  <View style={styles.scRight}>
-                    <View style={[styles.scStatusBadge, { backgroundColor: statusBg }]}>
-                      <View style={[styles.scStatusDot, { backgroundColor: statusColor }]} />
-                      <Text style={[styles.scStatusTxt, { color: statusColor }]}>{statusLabel}</Text>
+                    {/* Text */}
+                    <View style={styles.activityBody}>
+                      <Text style={styles.activityLabel} numberOfLines={1}>{item.label}</Text>
+                      <Text style={styles.activitySub} numberOfLines={1}>{item.sub}</Text>
                     </View>
-                    <Text style={[styles.scFeeTxt, { color: feeColor }]}>{student.feeStatus}</Text>
-                  </View>
 
-                  <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-                </TouchableOpacity>
+                    {/* Time */}
+                    <Text style={styles.activityTime}>{ago}</Text>
+                  </View>
+                </View>
               );
             })}
           </View>
         )}
+
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function FeePill({ status }: { status: string }) {
-  const paid = status === 'Paid';
-  const half = status === 'Half Paid';
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function StatChip({ label, value, color, icon }: {
+  label: string; value: number;
+  color: string; icon: keyof typeof Ionicons.glyphMap;
+}) {
   return (
-    <View
-      style={[
-        styles.feePill,
-        paid ? styles.feePaid : half ? styles.feeHalf : styles.feePending,
-      ]}
-    >
-      <Text style={[styles.feePillText, paid ? styles.feePaidT : half ? styles.feeHalfT : styles.feePendingT]}>
-        {status}
-      </Text>
+    <View style={styles.statChip}>
+      <View style={[styles.statChipIcon, { backgroundColor: color + '18' }]}>
+        <Ionicons name={icon} size={14} color={color} />
+      </View>
+      <Text style={[styles.statChipVal, { color }]}>{value}</Text>
+      <Text style={styles.statChipLbl}>{label}</Text>
     </View>
   );
 }
 
+function QuickAction({ icon, label, color, bg, onPress }: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string; color: string; bg: string; onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.82} style={styles.qa}>
+      <View style={[styles.qaIcon, { backgroundColor: bg }]}>
+        <Ionicons name={icon} size={20} color={color} />
+      </View>
+      <Text style={styles.qaLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F1F5F9' },
-  scroll: { paddingBottom: 8 },
-  hero: {
-    marginHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.sm,
-    borderRadius: theme.radius.lg,
-    backgroundColor: '#1E293B',
-    padding: theme.spacing.lg,
-    ...theme.shadow.card,
+  safe:   { flex: 1, backgroundColor: '#F8FAFC' },
+  scroll: { paddingBottom: 16 },
+
+  // ── Header ──
+  header: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingTop: 16, paddingBottom: 4,
   },
-  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  heroKicker: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  heroTitle: { marginTop: 6, fontSize: 24, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
-  heroDate: { marginTop: 4, fontSize: 13, color: '#94A3B8', fontWeight: '600' },
+  greeting:  { fontSize: 20, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
+  subDate:   { fontSize: 12, fontWeight: '500', color: '#94A3B8', marginTop: 2 },
   logoutBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(239,68,68,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(248,113,113,0.35)',
-  },
-  heroStat: {
-    marginTop: theme.spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  heroStatLeft: { flex: 1 },
-  heroStatLabel: { color: '#94A3B8', fontSize: 12, fontWeight: '700' },
-  heroStatValue: { marginTop: 4, fontSize: 28, fontWeight: '800', color: '#fff' },
-  heroStatSlash: { fontSize: 18, fontWeight: '700', color: '#64748B' },
-  ringWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: 'rgba(99,102,241,0.25)',
-    borderWidth: 1,
-    borderColor: 'rgba(165,180,252,0.35)',
-  },
-  ringText: { fontSize: 18, fontWeight: '800', color: '#EEF2FF' },
-  ringSub: { fontSize: 10, fontWeight: '700', color: '#A5B4FC', marginTop: 2, textTransform: 'uppercase' },
-  sectionLabel: {
-    marginHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.xl,
-    marginBottom: 10,
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  sectionLabelFlat: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: theme.colors.text,
-    letterSpacing: -0.3,
-  },
-  sectionHead: {
-    marginHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.xl,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  seeAll: { fontSize: 14, fontWeight: '700', color: theme.colors.primary },
-  actionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md,
-  },
-  actionTile: {
-    width: '48%',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.md,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginBottom: 10,
-    ...theme.shadow.card,
-  },
-  actionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  actionTitle: { fontSize: 15, fontWeight: '800', color: theme.colors.text },
-  actionSub: { marginTop: 2, fontSize: 12, color: theme.colors.mutedText, fontWeight: '600' },
-  kpiScroll: { paddingHorizontal: theme.spacing.md, gap: 10, paddingVertical: 2 },
-  kpiCard: {
-    width: 124,
-    borderRadius: theme.radius.md,
-    padding: 14,
-    minHeight: 108,
-    justifyContent: 'space-between',
-  },
-  kpiIndigo: { backgroundColor: '#312E81' },
-  kpiGreen: { backgroundColor: '#065F46' },
-  kpiAmber: { backgroundColor: '#B45309' },
-  kpiRed: { backgroundColor: '#991B1B' },
-  kpiVal: { fontSize: 26, fontWeight: '800', color: '#fff', marginTop: 8 },
-  kpiLab: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.85)', marginTop: 4 },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.md,
-    gap: 8,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  chipWarn: { backgroundColor: '#FEF3C7' },
-  chipBad: { backgroundColor: '#FEE2E2' },
-  chipSoft: { backgroundColor: '#FFEDD5' },
-  chipOk: { backgroundColor: '#DCFCE7' },
-  chipText: { fontSize: 12, fontWeight: '700', color: '#334155' },
-  listCard: {
-    marginHorizontal: theme.spacing.md,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    overflow: 'hidden',
-    ...theme.shadow.card,
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA',
+    alignItems: 'center', justifyContent: 'center',
   },
 
-  // ── Recent students list ──
-  studentGrid: {
-    marginHorizontal: theme.spacing.md,
+  // ── Stats row ──
+  statsRow: {
+    paddingHorizontal: 18, paddingVertical: 14, gap: 10,
+  },
+  statChip: {
+    alignItems: 'center', gap: 4,
+    backgroundColor: '#fff',
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12,
+    minWidth: 72,
+    borderWidth: 1, borderColor: '#F1F5F9',
+    ...Platform.select({
+      ios:     { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4 },
+      android: { elevation: 1 },
+    }),
+  },
+  statChipIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  statChipVal:  { fontSize: 18, fontWeight: '900', letterSpacing: -0.4 },
+  statChipLbl:  { fontSize: 10, fontWeight: '600', color: '#94A3B8' },
+
+  // ── Banner ──
+  banner: {
+    marginHorizontal: 18, borderRadius: 20,
+    padding: 20, flexDirection: 'row',
+    alignItems: 'center', overflow: 'hidden',
+    marginBottom: 16,
+    ...Platform.select({
+      ios:     { shadowColor: '#4338CA', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.28, shadowRadius: 16 },
+      android: { elevation: 6 },
+    }),
+  },
+  bannerCircle: {
+    position: 'absolute', top: -50, right: -50,
+    width: 180, height: 180, borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  bannerLeft:    { flex: 1 },
+  bannerEyebrow: { fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.2, marginBottom: 4 },
+  bannerCountRow:{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
+  bannerCount:   { fontSize: 38, fontWeight: '900', color: '#fff', letterSpacing: -1 },
+  bannerOf:      { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.5)', marginBottom: 6 },
+  bannerBarBg:   { height: 5, backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 3, marginTop: 8, marginBottom: 5, overflow: 'hidden' },
+  bannerBarFill: { height: 5, backgroundColor: '#fff', borderRadius: 3 },
+  bannerPct:     { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.55)' },
+  bannerAction:  {
+    alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    marginLeft: 12,
+  },
+  bannerActionTxt: { fontSize: 9, fontWeight: '700', color: '#fff', letterSpacing: 0.3 },
+
+  // ── Quick actions ──
+  actionsGrid: {
+    flexDirection: 'row',
+    paddingHorizontal: 18, marginBottom: 10, gap: 8,
+  },
+  qa: {
+    flex: 1, alignItems: 'center', gap: 6,
+    backgroundColor: '#fff',
+    borderRadius: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#F1F5F9',
+    ...Platform.select({
+      ios:     { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4 },
+      android: { elevation: 1 },
+    }),
+  },
+  qaIcon:  { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  qaLabel: { fontSize: 9, fontWeight: '700', color: '#475569' },
+
+  // ── Alerts ──
+  alertsWrap: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    paddingHorizontal: 18, gap: 8, marginBottom: 4,
+  },
+  alertPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20,
+  },
+  alertPillTxt: { fontSize: 11, fontWeight: '700' },
+
+  // ── Section header ──
+  sectionHead: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18, marginTop: 16, marginBottom: 10,
+  },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionDot:      { width: 8, height: 8, borderRadius: 4, backgroundColor: '#6366F1' },
+  sectionTitle:    { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+  seeAll:          { fontSize: 13, fontWeight: '700', color: '#6366F1' },
+
+  // ── Activity card ──
+  activityCard: {
+    marginHorizontal: 18,
     backgroundColor: '#fff',
     borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderWidth: 1, borderColor: '#F1F5F9',
     overflow: 'hidden',
+    paddingHorizontal: 16, paddingVertical: 8,
     ...Platform.select({
       ios:     { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: 12 },
       android: { elevation: 3 },
     }),
   },
-  scRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingRight: 14,
-    gap: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#F8FAFC',
+  activityItemWrap: { position: 'relative' },
+  timelineLine: {
+    position: 'absolute',
+    left: 19, top: 48, bottom: 0,
+    width: 1.5, backgroundColor: '#F1F5F9',
   },
-  scAccent: { width: 4, alignSelf: 'stretch' },
-  scPhoto: { width: 42, height: 42, borderRadius: 21 },
-  scInitialBox: {
-    width: 42, height: 42, borderRadius: 21,
+  activityItem: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: 12, paddingVertical: 10,
+  },
+
+  // Avatar with badge
+  activityAvatar:  { position: 'relative', width: 40, height: 40, flexShrink: 0 },
+  activityPhoto:   { width: 40, height: 40, borderRadius: 20 },
+  activityInitialBox: {
+    width: 40, height: 40, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center',
   },
-  scInitial:    { fontSize: 17, fontWeight: '800' },
-  scInfo:       { flex: 1, minWidth: 0 },
-  scName:       { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-  scSub:        { fontSize: 11, fontWeight: '500', color: '#94A3B8', marginTop: 1 },
-  scRight:      { alignItems: 'flex-end', gap: 4 },
-  scStatusBadge:{
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+  activityInitial: { fontSize: 16, fontWeight: '800' },
+  activityTypeBadge: {
+    position: 'absolute', bottom: -2, right: -2,
+    width: 16, height: 16, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: '#fff',
   },
-  scStatusDot:  { width: 6, height: 6, borderRadius: 3 },
-  scStatusTxt:  { fontSize: 10, fontWeight: '700' },
-  scFeeTxt:     { fontSize: 10, fontWeight: '600' },
 
-  emptyBox: { alignItems: 'center', paddingVertical: 32, paddingHorizontal: 20 },
-  emptyTitle: { marginTop: 12, fontSize: 17, fontWeight: '800', color: theme.colors.text },
-  emptySub: { marginTop: 6, fontSize: 13, color: theme.colors.mutedText, textAlign: 'center', lineHeight: 20 },
-  emptyCta: {
-    marginTop: 16,
-    backgroundColor: theme.colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
+  // Icon (for notifications etc)
+  activityIconBox: {
+    width: 40, height: 40, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  emptyCtaText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+
+  activityBody:  { flex: 1, minWidth: 0 },
+  activityLabel: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
+  activitySub:   { fontSize: 11, fontWeight: '500', color: '#94A3B8', marginTop: 1 },
+  activityTime:  { fontSize: 10, fontWeight: '600', color: '#CBD5E1', flexShrink: 0 },
+
+  // ── Empty ──
+  emptyActivity: {
+    marginHorizontal: 18, backgroundColor: '#fff',
+    borderRadius: 18, alignItems: 'center', paddingVertical: 32,
+    borderWidth: 1, borderColor: '#F1F5F9',
+  },
+  emptyTxt: { marginTop: 10, fontSize: 14, fontWeight: '600', color: '#94A3B8' },
 });

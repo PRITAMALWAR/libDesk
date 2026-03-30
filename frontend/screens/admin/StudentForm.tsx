@@ -103,37 +103,48 @@ export default function AdminStudentForm() {
       feeStatus: formData.feeStatus,
     };
 
-    let result: { ok: boolean; message?: string };
-    if (isEditing) {
-      result = await updateStudent(studentId, payload);
-    } else {
-      result = await addStudent({
-        ...payload,
-        isBlocked: false,
-      });
-    }
+    Alert.alert(
+      isEditing ? 'Save Changes?' : 'Create Student?',
+      isEditing
+        ? `Are you sure you want to update details for ${formData.name.trim()}?`
+        : `Create a new student account for ${formData.name.trim()}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: isEditing ? 'Save' : 'Create',
+          style: 'default',
+          onPress: async () => {
+            let result: { ok: boolean; message?: string };
+            if (isEditing) {
+              result = await updateStudent(studentId, payload);
+            } else {
+              result = await addStudent({ ...payload, isBlocked: false });
+            }
 
-    if (!result.ok) {
-      Alert.alert('Could not save', result.message || 'Something went wrong.');
-      return;
-    }
+            if (!result.ok) {
+              Alert.alert('Could not save', result.message || 'Something went wrong.');
+              return;
+            }
 
-    await fetchStudents();
+            await fetchStudents();
 
-    // Upload photo if one was selected
-    if (pendingPhotoUri) {
-      const savedId = isEditing ? studentId : (result as { ok: boolean; student?: { id: string } }).student?.id;
-      if (savedId) {
-        setUploadingPhoto(true);
-        const photoResult = await uploadStudentPhoto(savedId, pendingPhotoUri);
-        setUploadingPhoto(false);
-        if (!photoResult.ok) {
-          Alert.alert('Photo upload failed', photoResult.message || 'Could not upload photo. You can try again by editing the student.');
-        }
-      }
-    }
+            if (pendingPhotoUri) {
+              const savedId = isEditing ? studentId : (result as { ok: boolean; student?: { id: string } }).student?.id;
+              if (savedId) {
+                setUploadingPhoto(true);
+                const photoResult = await uploadStudentPhoto(savedId, pendingPhotoUri);
+                setUploadingPhoto(false);
+                if (!photoResult.ok) {
+                  Alert.alert('Photo upload failed', photoResult.message || 'Could not upload photo. You can try again by editing the student.');
+                }
+              }
+            }
 
-    navigation.goBack();
+            navigation.goBack();
+          },
+        },
+      ]
+    );
   };
 
   const pickPhoto = async () => {
