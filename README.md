@@ -5,7 +5,7 @@
 
 ```bash
 npm install
-npm --prefix backend install
+npm --prefix backend install this command
 ```
 
 ### 2) Run frontend only (Expo)
