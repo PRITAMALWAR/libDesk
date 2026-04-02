@@ -1,6 +1,5 @@
 # Library-student-Management
 
-## Run frontend and backend separately
 
 ### 1) Install dependencies
 
