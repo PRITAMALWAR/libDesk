@@ -81,7 +81,10 @@ export default function AdminStudentForm() {
       return;
     }
 
-    const parsedJoinDate = new Date(formData.joinDate);
+    // Use current timestamp if join date is today (avoids UTC-midnight timezone offset)
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const isJoinToday = formData.joinDate === todayStr;
+    const parsedJoinDate = isJoinToday ? new Date() : new Date(formData.joinDate + 'T12:00:00');
     if (Number.isNaN(parsedJoinDate.getTime())) {
       Alert.alert('Invalid date', 'Joining date is invalid.');
       return;
