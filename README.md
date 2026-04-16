@@ -36,7 +36,6 @@ curl http://localhost:5000/health
 
 1) Create backend env file:
 
-```bash
 cp backend/.env.example backend/.env
 ```
 
