@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Expo local state (machine-specific; do not commit)
+.expo/
+
+# Build outputs
+dist/
+web-build/
+
+# Env and secrets (keep examples committed)
+.env
+.env.local
+.env.*.local
+
+# Debug / OS
+npm-debug.*
+.DS_Store

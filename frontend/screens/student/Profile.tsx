@@ -162,10 +162,13 @@ export default function StudentProfile() {
 
           {/* top row */}
           <View style={styles.mcTop}>
-            <View style={styles.mcIconBox}>
-              <Ionicons name="library" size={16} color="#fff" />
-            </View>
-            <Text style={styles.mcLibrary}>LIBDESK LIBRARY</Text>
+            <Image
+              source={require('../../assets/libdesk-logo.png')}
+              style={styles.mcBrandLogo}
+              resizeMode="contain"
+              accessibilityLabel="LibDesk"
+            />
+            <Text style={styles.mcLibrary}>LibDesk Library</Text>
             <View style={[styles.mcChip, { backgroundColor: stats.isExpired ? '#EF4444' : '#22C55E' }]}>
               <Text style={styles.mcChipTxt}>{stats.isExpired ? 'EXPIRED' : 'VALID'}</Text>
             </View>
@@ -246,7 +249,7 @@ export default function StudentProfile() {
           <Ionicons name="chevron-forward" size={16} color="#FCA5A5" style={{ marginLeft: 'auto' }} />
         </TouchableOpacity>
 
-        <Text style={styles.versionTxt}>libDesk v1.0.0</Text>
+        <Text style={styles.versionTxt}>LibDesk v1.0.0</Text>
 
       </ScrollView>
     </SafeAreaView>
@@ -372,12 +375,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     marginBottom: 16, gap: 8,
   },
-  mcIconBox: {
-    width: 30, height: 30, borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  mcLibrary:   { flex: 1, fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.8)', letterSpacing: 1 },
+  mcBrandLogo: { height: 24, width: 108, marginRight: 4 },
+  mcLibrary:   { flex: 1, fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.92)', letterSpacing: 0.4 },
   mcChip:      { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   mcChipTxt:   { fontSize: 9, fontWeight: '900', color: '#fff', letterSpacing: 0.5 },
   mcName:      { fontSize: 18, fontWeight: '900', color: '#fff', letterSpacing: 1, marginBottom: 14 },

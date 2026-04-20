@@ -45,8 +45,11 @@ export default function LibraryCard({
       {/* Top bar */}
       <View style={styles.topBar}>
         <View style={styles.brandRow}>
-          <Ionicons name="library" size={14} color="#A5B4FC" />
-          <Text style={styles.brandText}>LIBDESK</Text>
+          <Image
+            source={require('../assets/libdesk-logo.png')}
+            style={styles.brandLogo}
+            resizeMode="contain"
+          />
         </View>
         <View style={[styles.statusPill, { borderColor: statusColor }]}>
           <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -191,13 +194,8 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 4,
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  brandText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#A5B4FC',
-    letterSpacing: 2,
-  },
+  brandRow: { flexDirection: 'row', alignItems: 'center', maxWidth: '62%' },
+  brandLogo: { height: 22, width: 120 },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',

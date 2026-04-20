@@ -4,9 +4,15 @@
   },
   "build": {
     "preview": {
+      "channel": "preview",
       "distribution": "internal"
     },
-    "production": {}
+    "production": {
+      "channel": "production",
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
   },
   "submit": {
     "production": {}

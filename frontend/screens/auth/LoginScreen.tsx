@@ -13,6 +13,7 @@ import {
   Keyboard,
   ActivityIndicator,
   Dimensions,
+  Image,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useAppStore } from '../../store';
@@ -62,13 +63,15 @@ export default function LoginScreen() {
         <View style={styles.decCircle2} />
 
         {/* Brand */}
-        <View style={styles.brandRow}>
-          <View style={styles.brandIcon}>
-            <Ionicons name="library" size={28} color="#fff" />
-          </View>
+        <View style={styles.brandRow} accessibilityRole="header" accessibilityLabel="LibDesk">
+          <Image
+            source={require('../../assets/libdesk-logo.png')}
+            style={styles.brandLogo}
+            resizeMode="contain"
+            accessibilityIgnoresInvertColors
+          />
         </View>
-        <Text style={styles.brandName}>libDesk</Text>
-        <Text style={styles.brandTagline}>Your Library, Simplified</Text>
+        <Text style={styles.brandTagline}>Knowledge & reference</Text>
 
         {/* 3 stat pills */}
         <View style={styles.statRow}>
@@ -221,22 +224,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
   brandRow: {
-    marginBottom: 12,
+    marginBottom: 10,
+    alignSelf: 'stretch',
+    alignItems: 'flex-start',
   },
-  brandIcon: {
-    width: 60, height: 60, borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
-  },
-  brandName: {
-    fontSize: 32, fontWeight: '800',
-    color: '#fff', letterSpacing: -0.8,
-    marginBottom: 4,
+  brandLogo: {
+    width: '100%',
+    maxWidth: 300,
+    height: 72,
   },
   brandTagline: {
-    fontSize: 14, fontWeight: '500',
-    color: '#A5B4FC', marginBottom: 20,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#A5B4FC',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 20,
   },
   statRow: {
     flexDirection: 'row', alignItems: 'center',
