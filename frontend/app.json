@@ -30,7 +30,8 @@
       "eas": {
         "projectId": "09bd1638-b8f8-4153-a64b-38fd33b99859"
       },
-      "apiPort": 5001
+      "apiPort": 5001,
+      "apiProductionUrl": "https://libdesk.onrender.com"
     },
     "updates": {
       "url": "https://u.expo.dev/09bd1638-b8f8-4153-a64b-38fd33b99859"

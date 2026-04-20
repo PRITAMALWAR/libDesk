@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
+type ExtraConfig = { apiPort?: number | string; apiProductionUrl?: string };
+
 /**
  * Backend HTTP port — must match `PORT` in `backend/.env`.
  * Override: set `EXPO_PUBLIC_API_PORT` or `expo.extra.apiPort` in app.json.
@@ -10,7 +12,7 @@ export function getApiPort(): number {
   if (env !== undefined && env !== '' && !Number.isNaN(Number(env))) {
     return Number(env);
   }
-  const extra = Constants.expoConfig?.extra as { apiPort?: number | string } | undefined;
+  const extra = Constants.expoConfig?.extra as ExtraConfig | undefined;
   const p = extra?.apiPort;
   if (p !== undefined && p !== '' && !Number.isNaN(Number(p))) {
     return Number(p);
@@ -18,11 +20,20 @@ export function getApiPort(): number {
   return 5001;
 }
 
-/** Base URL for API (no trailing slash). Set EXPO_PUBLIC_API_URL to override host+port entirely. */
+/**
+ * Base URL for API (no trailing slash).
+ * Priority: EXPO_PUBLIC_API_URL → expo.extra.apiProductionUrl → LAN / localhost + apiPort (no URL in config).
+ */
 export function resolveApiBaseUrl(): string {
   const full = process.env.EXPO_PUBLIC_API_URL;
   if (full) {
     return full.replace(/\/$/, '');
+  }
+
+  const extra = Constants.expoConfig?.extra as ExtraConfig | undefined;
+  const deployed = extra?.apiProductionUrl?.trim();
+  if (deployed) {
+    return deployed.replace(/\/$/, '');
   }
 
   const hostUri =
